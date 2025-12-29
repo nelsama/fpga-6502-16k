@@ -1,6 +1,8 @@
-# fpga-6502
+# fpga-6502-16k
 
-Computador retro basado en el procesador **MOS 6502** implementado en una **Sipeed Tang Nano 9K** (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM, puertos GPIO bidireccionales, comunicación I2C, UART y **chip de sonido SID 6581**.
+Computador retro basado en el procesador **MOS 6502** implementado en una **Sipeed Tang Nano 9K** (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, UART y **chip de sonido SID 6581**.
+
+> 🆕 **Versión 16K**: ROM ampliada a 16KB ($8000-$BFFF) para mayor espacio de programa.
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -22,7 +24,7 @@ Computador retro basado en el procesador **MOS 6502** implementado en una **Sipe
 │      ▼         ▼       ▼     ▼     ▼         ▼       ▼           │
 │ ┌────────┐┌────────┐┌────────────┐┌────────┐┌──────────┐         │
 │ │  RAM   ││  ROM   ││ Puertos I/O││SID 6581││SPI Master│         │
-│ │ 16 KB  ││  8 KB  ││GPIO+I2C+UAR││ Audio  ││ SD Card  │         │
+│ │ 16 KB  ││ 16 KB  ││GPIO+I2C+UAR││ Audio  ││ SD Card  │         │
 │ └────────┘└────────┘└────────────┘└───┬────┘└────┬─────┘         │
 │                                       │ PWM      │ SPI           │
 │                                  [Audio Out] [SD Card]           │
@@ -35,8 +37,7 @@ Computador retro basado en el procesador **MOS 6502** implementado en una **Sipe
 |-------|--------|-------------|
 | `$0000 - $3FFF` | 16 KB | **RAM** (Zero Page, Stack, memoria de trabajo) |
 | `$4000 - $7FFF` | 16 KB | *No usado* |
-| `$8000 - $9FFF` | 8 KB | **ROM** (Código del programa) |
-| `$A000 - $BFFF` | 8 KB | *No usado* |
+| `$8000 - $BFFF` | 16 KB | **ROM** (Código del programa) |
 | `$C000` | 1 byte | **Puerto 1** - Datos (bidireccional) |
 | `$C001` | 1 byte | **Puerto 2** - Datos (bidireccional) |
 | `$C002` | 1 byte | **Config Puerto 1** (0=salida, 1=entrada) |
@@ -46,7 +47,7 @@ Computador retro basado en el procesador **MOS 6502** implementado en una **Sipe
 | `$C030 - $C03F` | 16 bytes | **Timer de precisión** |
 | `$C040 - $C047` | 8 bytes | **SPI Master** (SD Card) |
 | `$D400 - $D41F` | 32 bytes | **SID 6581** (compatible C64) |
-| `$FFFA - $FFFF` | 6 bytes | **Vectores** (mapeados a ROM $9FFA-$9FFF) |
+| `$FFFA - $FFFF` | 6 bytes | **Vectores** (mapeados a ROM $BFFA-$BFFF) |
 
 ### Registros I2C
 
@@ -199,8 +200,9 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 - **Características**: Soporte completo de IRQ, NMI, pipeline opcional
 
 ### Memoria
-- **RAM**: 16 KB usando Block RAM de Gowin
-- **ROM**: 8 KB con programa hardcoded (generada con Python)
+- **RAM**: 16 KB usando Block RAM de Gowin (8 bloques BSRAM)
+- **ROM**: 16 KB con programa hardcoded (16 bloques BSRAM, generada con Python)
+- **Uso BSRAM**: 24/26 bloques (92%)
 
 ### Puertos GPIO
 - **Puerto 1**: 8 bits (LVCMOS33, pines 70-77)
