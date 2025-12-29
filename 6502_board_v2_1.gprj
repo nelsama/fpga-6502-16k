@@ -1,0 +1,36 @@
+<?xml version="1" encoding="UTF-8"?>
+<!DOCTYPE gowin-fpga-project>
+<Project>
+    <Template>FPGA</Template>
+    <Version>5</Version>
+    <Device name="GW1NR-9C" pn="GW1NR-LV9QN88PC6/I5">gw1nr9c-004</Device>
+    <FileList>
+        <File path="src/6502/cpu65xx_fast.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/A6502.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/Board.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/Data_bus_mux.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/Debouncer.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/NetSID/src/sid_6581.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/NetSID/src/sid_coeffs.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/NetSID/src/sid_components.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/NetSID/src/sid_filters.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/NetSID/src/sid_voice.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/Reset.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/gowin_clkdiv_3_375_MHz/gowin_clkdiv_3_375_MHz.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/gowin_sp/ram_gowin.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/i2c_master/i2c_master.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/i2c_master_interface.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/register_8bit.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/rom.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/sid_wrapper.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/spi_master/spi_master.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/spi_wrapper.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/timer_rtc.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/timer_wrapper.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/uart.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/uart_wrapper.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/6502_board.cst" type="file.cst" enable="1"/>
+        <File path="src/6502_board_v2_1.rao" type="file.gao" enable="0"/>
+        <File path="README.md" type="file.other" enable="1"/>
+    </FileList>
+</Project>

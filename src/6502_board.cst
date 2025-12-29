@@ -1,0 +1,96 @@
+//Copyright (C)2014-2023 Gowin Semiconductor Corporation.
+//All rights reserved. 
+//File Title: Physical Constraints file
+//GOWIN Version: 1.9.8.11
+//Part Number: GW1NR-LV9QN88PC6/I5
+//Device: GW1NR-9
+//Device Version: C
+//Created Time: Mon 05 29 23:44:28 2023
+
+
+
+
+IO_LOC "port_2[5]" 16;
+IO_PORT "port_2[5]" IO_TYPE=LVCMOS18 DRIVE=8 BANK_VCCIO=1.8;  //BANK3
+
+IO_LOC "port_2[4]" 15;
+IO_PORT "port_2[4]" IO_TYPE=LVCMOS18 DRIVE=8 BANK_VCCIO=1.8;  //BANK3
+
+IO_LOC "port_2[3]" 14;
+IO_PORT "port_2[3]" IO_TYPE=LVCMOS18 DRIVE=8 BANK_VCCIO=1.8;  //BANK3
+
+IO_LOC "port_2[2]" 13;
+IO_PORT "port_2[2]" IO_TYPE=LVCMOS18 DRIVE=8 BANK_VCCIO=1.8;  //BANK3
+
+IO_LOC "port_2[1]" 11;
+IO_PORT "port_2[1]" IO_TYPE=LVCMOS18 DRIVE=8 BANK_VCCIO=1.8;  //BANK3
+
+IO_LOC "port_2[0]" 10;
+IO_PORT "port_2[0]" IO_TYPE=LVCMOS18 DRIVE=8 BANK_VCCIO=1.8;  //BANK3
+
+
+
+IO_LOC "cpu_clk_out" 35;
+IO_PORT "cpu_clk_out" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;      //BANK2
+
+IO_LOC "reset_in" 4;
+IO_PORT "reset_in" IO_TYPE=LVCMOS18 PULL_MODE=UP;             //BANK3
+
+IO_LOC "CLOCK_27_i" 52;
+IO_PORT "CLOCK_27_i" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;                        //BANK1
+
+
+IO_LOC "port_1[7]" 77;
+IO_PORT "port_1[7]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "port_1[6]" 76;
+IO_PORT "port_1[6]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "port_1[5]" 75;
+IO_PORT "port_1[5]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "port_1[4]" 74;
+IO_PORT "port_1[4]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "port_1[3]" 73;
+IO_PORT "port_1[3]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+
+IO_LOC "port_1[2]" 72; //STB
+IO_PORT "port_1[2]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "port_1[1]" 71; //DATA_IO
+IO_PORT "port_1[1]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "port_1[0]" 70; //CLK
+IO_PORT "port_1[0]" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+
+
+
+IO_LOC "i2c_scl" 48; //I2C SCL
+IO_PORT "i2c_scl" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+IO_LOC "i2c_sda" 49; //I2C SDA
+IO_PORT "i2c_sda" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;   //BANK1
+
+// UART - Tang Nano 9K
+IO_LOC "uart_tx" 32; //UART TX (FPGA -> USB-TTL RX)
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "uart_rx" 31; //UART RX (USB-TTL TX -> FPGA)
+IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+
+// SID Audio PWM Output
+IO_LOC "sid_audio_out" 33;
+IO_PORT "sid_audio_out" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+
+// SPI Bus - Usando pines TF Card (para SD Card o Flash externo)
+IO_LOC "spi_mosi" 37;       // TF_MOSI (IOB31A)
+IO_PORT "spi_mosi" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "spi_miso" 39;       // TF_MISO (IOB33A)
+IO_PORT "spi_miso" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
+IO_LOC "spi_sclk" 36;       // TF_SCLK (IOB29B)
+IO_PORT "spi_sclk" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+
+// SPI Chip Selects
+IO_LOC "spi_cs_n[0]" 38;    // TF_CS - SD Card o Flash externo
+IO_PORT "spi_cs_n[0]" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "spi_cs_n[1]" 25;    // GPIO libre - dispositivo externo
+IO_PORT "spi_cs_n[1]" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "spi_cs_n[2]" 26;    // GPIO libre - dispositivo externo
+IO_PORT "spi_cs_n[2]" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "spi_cs_n[3]" 27;    // GPIO libre - dispositivo externo
+IO_PORT "spi_cs_n[3]" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+
+

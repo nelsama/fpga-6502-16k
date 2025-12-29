@@ -1,0 +1,44 @@
+# Gowin FPGA Project Files
+*.gprj.user
+*.rpt.html
+*.syn.rpt.html
+*.tr.html
+*.pin.html
+*.power.html
+*.timing_paths
+
+# Implementation files (generated)
+impl/gwsynthesis/*.html
+impl/gwsynthesis/*.xml
+impl/gwsynthesis/*.rpt.html
+impl/gwsynthesis/*.prj
+impl/gwsynthesis/*.vg
+impl/pnr/*.html
+impl/pnr/*.binx
+impl/pnr/*.fs
+impl/pnr/*.rpt.txt
+impl/pnr/*.timing_paths
+impl/temp/
+
+# Backup files
+*~
+*.bak
+*.orig
+
+# OS specific files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# IDE files
+*.swp
+*.swo
+*~
+
+# Generated files
+*.bit
+*.fs
+*.binx
+
+# Log files
+*.log
