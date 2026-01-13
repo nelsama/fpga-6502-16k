@@ -343,9 +343,11 @@ impl/                         # Archivos de implementación (generados)
 - **CPU 6502 Core**: Peter Wendrich ([FPGA64 Project](http://www.syntiac.com/fpga64.html))
 - **SID 6581 Core**: NetSID Project (implementación VHDL del chip de sonido)
 
+
 ## 📄 Licencia
 
-[Especificar licencia aquí]
+Este proyecto se distribuye bajo los términos de la **GNU General Public License v3.0 (GPLv3)**.
+Consulta el archivo LICENSE para más detalles o visita https://www.gnu.org/licenses/gpl-3.0.html
 
 ## 🤝 Contribuciones
 
