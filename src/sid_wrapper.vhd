@@ -54,6 +54,9 @@ architecture rtl of sid_wrapper is
     -- Registros sincronizados en dominio clk_fast
     signal addr_sync    : std_logic_vector(4 downto 0) := (others => '0');
     signal data_sync    : std_logic_vector(7 downto 0) := (others => '0');
+    
+    -- Mux de dirección: addr_sync para escritura, sid_addr para lectura
+    signal sid_addr_mux : std_logic_vector(4 downto 0);
 
 begin
 
@@ -120,8 +123,12 @@ begin
     end process;
     
     -- Señales al SID
-    sid_cs <= write_pulse;
-    sid_we <= write_pulse;
+    -- cs activo en escritura O lectura del rango SID
+    sid_cs <= write_pulse or (addr_match and cpu_rw);
+    sid_we <= write_pulse;  -- we solo en escritura
+    
+    -- Mux de dirección: durante escritura usa addr_sync, sino usa sid_addr (para lecturas)
+    sid_addr_mux <= addr_sync when write_pulse = '1' else sid_addr;
     
     -- ============================================
     -- Instancia del SID 6581
@@ -135,7 +142,7 @@ begin
             reset       => reset_active,
             cs          => sid_cs,
             we          => sid_we,
-            addr        => addr_sync,
+            addr        => sid_addr_mux,
             di          => data_sync,
             do          => sid_dout,
             pot_x       => '0',
