@@ -171,24 +171,24 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 | `$D419` | POT_X | Paddle X (solo lectura) |
 | `$D41A` | POT_Y | Paddle Y (solo lectura) |
 | `$D41B` | OSC3 | Oscilador 3 random (solo lectura) |
-| `$D41C` | ENV_MAX | **Máximo** de ENV1/ENV2/ENV3 (solo lectura) ⚡ |
+| `$D41C` | ENV3 | Envelope voz 3 (solo lectura) - *Compatible C64* |
 | `$D41D` | ENV1 | Envelope voz 1 (solo lectura) ⚡ |
 | `$D41E` | ENV2 | Envelope voz 2 (solo lectura) ⚡ |
-| `$D41F` | ENV3 | Envelope voz 3 (solo lectura) ⚡ |
+| `$D41F` | ENV_MAX | Máximo de ENV1/ENV2/ENV3 (solo lectura) ⚡ |
 
-> ⚡ **Extensión VU Meter**: Los registros $D41C-$D41F exponen los envelopes de las 3 voces
-> individualmente más el máximo combinado. Esto permite implementar visualizadores de audio
-> (VU meters) en software. **Nota:** $D41C difiere del C64 original que retornaba solo ENV3.
+> ⚡ **Extensión VU Meter**: Los registros $D41D-$D41F son extensiones que exponen los envelopes
+> de las 3 voces individualmente más el máximo combinado. Esto permite implementar visualizadores
+> de audio (VU meters) en software. **$D41C mantiene compatibilidad total con el C64 original.**
 
 **Ejemplo de uso para VU meter:**
 ```asm
 ; Leer nivel de audio global (máximo de las 3 voces)
-    LDA $D41C       ; ENV_MAX -> A = 0-255
+    LDA $D41F       ; ENV_MAX -> A = 0-255
 
 ; Leer envelopes individuales
     LDA $D41D       ; ENV1 (voz 1)
     LDA $D41E       ; ENV2 (voz 2)  
-    LDA $D41F       ; ENV3 (voz 3)
+    LDA $D41C       ; ENV3 (voz 3) - compatible C64
 ```
 
 **Control Register ($D404, $D40B, $D412) bits:**

@@ -176,15 +176,14 @@ begin
     end process;
     
     -- Mux de salida: registros extendidos para VU meter
-    -- $D41C (11100) = env_max (máximo de los 3)
-    -- $D41D (11101) = env1 (voz 1)
-    -- $D41E (11110) = env2 (voz 2)
-    -- $D41F (11111) = env3 (voz 3)
-    cpu_data_mux <= env_max when sid_addr = "11100" else
-                    env1    when sid_addr = "11101" else
+    -- $D41C (11100) = ENV3 (SID original - NO MODIFICAR)
+    -- $D41D (11101) = env1 (voz 1) - NUEVO
+    -- $D41E (11110) = env2 (voz 2) - NUEVO
+    -- $D41F (11111) = env_max (máximo de los 3) - NUEVO
+    cpu_data_mux <= env1    when sid_addr = "11101" else
                     env2    when sid_addr = "11110" else
-                    env3    when sid_addr = "11111" else
-                    sid_dout;
+                    env_max when sid_addr = "11111" else
+                    sid_dout;  -- $D41C y otros van directo al SID
     
     -- Bus de datos de salida (lectura de registros SID)
     cpu_data_out <= cpu_data_mux when (addr_match = '1' and cpu_rw = '1') else (others => 'Z');
