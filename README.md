@@ -173,6 +173,10 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 | `$D41B` | OSC3 | Oscilador 3 random (solo lectura) |
 | `$D41C` | ENV3 | Envelope 3 (solo lectura) |
 
+> **Nota:** Los registros de solo lectura ($D419-$D41C) están completamente soportados.
+> OSC3 retorna valores pseudo-aleatorios del oscilador de ruido, y ENV3 retorna
+> el valor actual del envelope de la voz 3 (útil para efectos y sample playback).
+
 **Control Register ($D404, $D40B, $D412) bits:**
 - Bit 0: GATE (iniciar/detener envelope)
 - Bit 1: SYNC (sincronizar con voz anterior)
