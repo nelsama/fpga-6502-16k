@@ -54,7 +54,12 @@ entity sid6581 is
 		pot_x				: in std_logic;	-- paddle input-X
 		pot_y				: in std_logic;	-- paddle input-Y
 		audio_out		: out std_logic;		-- this line holds the audio-signal in PWM format
-		audio_data	: out std_logic_vector(17 downto 0)
+		audio_data	: out std_logic_vector(17 downto 0);
+		
+		-- Envelope outputs for all 3 voices (active VU meter support)
+		env1_out		: out std_logic_vector(7 downto 0);
+		env2_out		: out std_logic_vector(7 downto 0);
+		env3_out		: out std_logic_vector(7 downto 0)
 	);
 end sid6581;
 
@@ -457,5 +462,10 @@ begin
 		end if;
 	end if;
 end process;
+
+-- Expose all 3 voice envelopes for VU meter
+env1_out <= Voice_1_Env;
+env2_out <= Voice_2_Env;
+env3_out <= Misc_Env3;
 
 end Behavioral;

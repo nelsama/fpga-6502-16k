@@ -57,6 +57,13 @@ architecture rtl of sid_wrapper is
     
     -- Mux de dirección: addr_sync para escritura, sid_addr para lectura
     signal sid_addr_mux : std_logic_vector(4 downto 0);
+    
+    -- Señales de envelope de las 3 voces (para VU meter)
+    signal env1, env2, env3 : std_logic_vector(7 downto 0);
+    signal env_max          : std_logic_vector(7 downto 0);
+    
+    -- Datos de salida con el máximo de envelopes
+    signal cpu_data_mux     : std_logic_vector(7 downto 0);
 
 begin
 
@@ -148,10 +155,38 @@ begin
             pot_x       => '0',
             pot_y       => '0',
             audio_out   => audio_out,
-            audio_data  => audio_data
+            audio_data  => audio_data,
+            env1_out    => env1,
+            env2_out    => env2,
+            env3_out    => env3
         );
     
+    -- ============================================
+    -- Cálculo del máximo de los 3 envelopes (VU meter)
+    -- ============================================
+    process(env1, env2, env3)
+    begin
+        if unsigned(env1) >= unsigned(env2) and unsigned(env1) >= unsigned(env3) then
+            env_max <= env1;
+        elsif unsigned(env2) >= unsigned(env3) then
+            env_max <= env2;
+        else
+            env_max <= env3;
+        end if;
+    end process;
+    
+    -- Mux de salida: registros extendidos para VU meter
+    -- $D41C (11100) = env_max (máximo de los 3)
+    -- $D41D (11101) = env1 (voz 1)
+    -- $D41E (11110) = env2 (voz 2)
+    -- $D41F (11111) = env3 (voz 3)
+    cpu_data_mux <= env_max when sid_addr = "11100" else
+                    env1    when sid_addr = "11101" else
+                    env2    when sid_addr = "11110" else
+                    env3    when sid_addr = "11111" else
+                    sid_dout;
+    
     -- Bus de datos de salida (lectura de registros SID)
-    cpu_data_out <= sid_dout when (addr_match = '1' and cpu_rw = '1') else (others => 'Z');
+    cpu_data_out <= cpu_data_mux when (addr_match = '1' and cpu_rw = '1') else (others => 'Z');
 
 end architecture;
