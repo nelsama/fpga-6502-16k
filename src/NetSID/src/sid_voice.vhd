@@ -134,7 +134,7 @@ pulsewidth(11 downto 8)	<= Pw_hi(3 downto 0);
 --
 pulsewidth(7 downto 0)	<= Pw_lo(7 downto 0);
 --
-voice										<= signal_vol(19 downto 8);
+voice						<= signal_vol(19 downto 8);
 
 -- Phase accumulator :
 -- "As I recall, the Oscillator is a 24-bit phase-accumulating design of which

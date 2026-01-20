@@ -10,9 +10,11 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 ┌──────────────────────────────────────────────────────────────────┐
 │                         Board.vhd (Top-Level)                    │
 │                                                                  │
-│  CLOCK_27MHz ──▶ [CLKDIV] ──▶ 6.75 MHz ──▶ /2 ──▶ 3.375 MHz     │
-│                      │                                           │
-│                      └──▶ /7 ──▶ ~1 MHz (SID)                    │
+│  CLOCK_27MHz ──▶ [PLL ×3] ──▶ 81 MHz ──▶ SID PWM DAC             │
+│      │                                                           │
+│      └──▶ [CLKDIV] ──▶ 6.75 MHz ──▶ /2 ──▶ 3.375 MHz            │
+│                │                                                 │
+│                └──▶ /7 ──▶ ~1 MHz (SID)                          │
 │                                                                  │
 │  ┌─────────────────────────────────────────────────────────────┐ │
 │  │                      CPU 6502 (cpu65xx_fast)                │ │
@@ -28,6 +30,7 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 │ └────────┘└────────┘└────────────┘└───┬────┘└────┬─────┘         │
 │                                       │ PWM      │ SPI           │
 │                                  [Audio Out] [SD Card]           │
+│                                   81 MHz PWM                     │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -205,10 +208,12 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 
 | Señal | Frecuencia | Uso |
 |-------|------------|-----|
-| `CLOCK_27_i` | 27 MHz | Entrada del cristal, DAC SID |
+| `CLOCK_27_i` | 27 MHz | Entrada del cristal |
+| `clk_81mhz` | 81 MHz | PWM DAC del SID (PLL ×3, ~19.78 kHz PWM) |
 | `system_clk` | 6.75 MHz | Reloj del sistema |
 | `cpu_clk` | **3.375 MHz** | Reloj del CPU 6502 |
 | `clk_1mhz` | ~0.96 MHz | Reloj del SID 6581 (27MHz/28) |
+| `clk_fast` | 27 MHz | Filtros digitales del SID |
 
 ## 🔧 Componentes
 
@@ -236,16 +241,19 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 - Debouncer para botón de reset externo
 
 ### Chip de Sonido SID 6581
-- **Implementación**: NetSID (VHDL) con DAC Delta-Sigma
+- **Implementación**: NetSID (VHDL) con DAC PWM de alta frecuencia
 - **Modelo**: SID 6581 (NMOS original, no 8580)
 - **3 voces** con formas de onda: Triangle, Sawtooth, Pulse, Noise
 - **Filtro multimodo**: Low-pass, Band-pass, High-pass, Notch
 - **ADSR envelope** por voz con aproximación exponencial por tramos
-- **Salida**: PWM Delta-Sigma (pin 33)
+- **Salida**: PWM de alta frecuencia (pin 33)
 - **Reloj SID**: ~1 MHz (derivado de 27 MHz)
-- **Reloj DAC**: 27 MHz
+- **Reloj filtros**: 27 MHz
+- **Reloj DAC PWM**: 81 MHz (PLL ×3 desde 27 MHz) → ~19.78 kHz de frecuencia PWM
+- **Resolución interna**: 12 bits (fiel al SID original)
 - **Direccionamiento**: $D400-$D41F (compatible C64)
 - **Sincronización**: Cross-domain entre CPU (6.75 MHz) y SID (27 MHz)
+- **Mejora de audio**: PLL para PWM de alta frecuencia, reduce ruido de alta frecuencia sin alterar el sonido original
 
 **¿Por qué 6581 y no 8580?**
 
@@ -317,6 +325,7 @@ src/
 │       ├── sid_components.vhd # Componentes auxiliares
 │       └── dac.vhd           # DAC Delta-Sigma para audio
 ├── gowin_clkdiv_*/           # IP divisor de reloj
+├── gowin_pll_81mhz/          # PLL 27→81 MHz para PWM DAC
 ├── gowin_sp/                 # IP RAM
 ├── i2c_master/               # IP I2C Master
 └── asm/                      # Librerías en ensamblador 6502

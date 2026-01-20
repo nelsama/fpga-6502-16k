@@ -17,6 +17,7 @@
         <File path="src/NetSID/src/sid_voice.vhd" type="file.vhdl" enable="1"/>
         <File path="src/Reset.vhd" type="file.vhdl" enable="1"/>
         <File path="src/gowin_clkdiv_3_375_MHz/gowin_clkdiv_3_375_MHz.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/gowin_pll_81mhz/gowin_pll_81mhz.vhd" type="file.vhdl" enable="1"/>
         <File path="src/gowin_sp/ram_gowin.vhd" type="file.vhdl" enable="1"/>
         <File path="src/i2c_master/i2c_master.vhd" type="file.vhdl" enable="1"/>
         <File path="src/i2c_master_interface.vhd" type="file.vhdl" enable="1"/>

@@ -52,6 +52,11 @@ architecture arch of Board is
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
     signal clk_1mhz_counter : integer range 0 to 15 := 0;
+    
+    -- Reloj de 81 MHz para PWM DAC de 12 bits
+    signal clk_81mhz        : std_logic := '0';
+    signal pll_lock         : std_logic := '0';
+    signal clk_81mhz_safe   : std_logic := '0';
 
 
 begin
@@ -62,6 +67,18 @@ begin
         hclkin => CLOCK_27_i,
         resetn => '1'
     );
+
+    -- PLL para generar 81 MHz para PWM DAC de 12 bits
+    -- 81 MHz / 4096 = 19.78 kHz (frecuencia PWM adecuada)
+    pll_inst: entity work.Gowin_PLL_81MHz
+    port map (
+        clkout => clk_81mhz,
+        lock   => pll_lock,
+        clkin  => CLOCK_27_i
+    );
+    
+    -- Usar 81 MHz solo cuando el PLL esté bloqueado, sino usar 27 MHz
+    clk_81mhz_safe <= clk_81mhz when pll_lock = '1' else CLOCK_27_i;
 
     init_reset : entity work.reset_generator -- 50 ms
     port map(
@@ -185,7 +202,8 @@ begin
     -- SID 6581 Interface ($D400-$D41F) - Compatible C64
     sid_interface : entity work.sid_wrapper
     port map(
-        clk_fast=>CLOCK_27_i,
+        clk_fast=>CLOCK_27_i,       -- 27 MHz para filtros
+        clk_dac=>clk_81mhz_safe,    -- 81 MHz cuando PLL locked, sino 27 MHz
         clk_system=>system_clk,
         clk_1mhz=>clk_1mhz,
         rst_n=>reset,

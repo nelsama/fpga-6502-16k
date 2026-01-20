@@ -11,7 +11,8 @@ use ieee.numeric_std.all;
 
 entity sid_wrapper is
     port (
-        clk_fast    : in  std_logic;         -- 27 MHz (para filtros y DAC)
+        clk_fast    : in  std_logic;         -- 27 MHz (para filtros)
+        clk_dac     : in  std_logic;         -- 81 MHz (solo para PWM DAC)
         clk_system  : in  std_logic;         -- 6.75 MHz
         clk_1mhz    : in  std_logic;         -- ~1 MHz (generado externamente)
         rst_n       : in  std_logic;
@@ -139,13 +140,14 @@ begin
     
     -- ============================================
     -- Instancia del SID 6581
-    -- (clk_1mhz viene del puerto externo)
+    -- clk32: 27 MHz para filtros digitales
+    -- clk_DAC: 81 MHz para PWM de 12 bits
     -- ============================================
     sid_inst : entity work.sid6581
         port map (
             clk_1MHz    => clk_1mhz,
-            clk32       => clk_fast,
-            clk_DAC     => clk_fast,
+            clk32       => clk_fast,        -- 27 MHz
+            clk_DAC     => clk_dac,         -- 81 MHz
             reset       => reset_active,
             cs          => sid_cs,
             we          => sid_we,
