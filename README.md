@@ -1,6 +1,6 @@
 # fpga-6502-16k
 
-Computador retro basado en el procesador **MOS 6502** implementado en una [**Sipeed Tang Nano 9K**](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html) (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, UART y **chip de sonido SID 6581**.
+Computador retro basado en el procesador **MOS 6502** implementado en una [**Sipeed Tang Nano 9K**](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html) (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, SPI, UART y **chip de sonido SID 6581**.
 
 > 🆕 **Versión 16K**: ROM ampliada a 16KB ($8000-$BFFF) para mayor espacio de programa.
 
