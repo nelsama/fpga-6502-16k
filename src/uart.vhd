@@ -43,8 +43,8 @@ architecture rtl of uart is
     -- Registros UART (direcciones relativas)
     -- $00 = TX_DATA  (W) / RX_DATA (R)
     -- $01 = STATUS   (R) / CONTROL (W)
-    -- $02 = BAUD_LO  (R/W) - Divisor bajo (futuro)
-    -- $03 = BAUD_HI  (R/W) - Divisor alto (futuro)
+    -- $02 = BAUD_LO  (R/W) - Divisor bajo (bits 7:0)
+    -- $03 = BAUD_HI  (R/W) - Divisor alto (bits 15:8)
     
     -- Status bits (lectura)
     -- Bit 0: TX_READY  (1 = listo para transmitir)
@@ -86,6 +86,10 @@ architecture rtl of uart is
     -- Control
     signal tx_irq_en    : std_logic := '0';
     signal rx_irq_en    : std_logic := '0';
+    
+    -- Divisor de baudrate configurable (por defecto usa DIVISOR calculado)
+    signal baud_divisor : integer range 0 to 65535 := DIVISOR;
+    signal baud_half    : integer range 0 to 65535 := HALF_DIVISOR;
     
 begin
 
@@ -139,7 +143,7 @@ begin
                         
                     when TX_START =>
                         uart_tx <= '0';  -- Start bit = bajo
-                        if tx_clk_cnt = DIVISOR - 1 then
+                        if tx_clk_cnt = baud_divisor - 1 then
                             tx_clk_cnt <= 0;
                             tx_bit_cnt <= 0;
                             tx_state <= TX_DATA;
@@ -149,7 +153,7 @@ begin
                         
                     when TX_DATA =>
                         uart_tx <= tx_data_reg(tx_bit_cnt);
-                        if tx_clk_cnt = DIVISOR - 1 then
+                        if tx_clk_cnt = baud_divisor - 1 then
                             tx_clk_cnt <= 0;
                             if tx_bit_cnt = 7 then
                                 tx_state <= TX_STOP;
@@ -162,7 +166,7 @@ begin
                         
                     when TX_STOP =>
                         uart_tx <= '1';  -- Stop bit = alto
-                        if tx_clk_cnt = DIVISOR - 1 then
+                        if tx_clk_cnt = baud_divisor - 1 then
                             tx_state <= TX_IDLE;
                         else
                             tx_clk_cnt <= tx_clk_cnt + 1;
@@ -202,7 +206,7 @@ begin
                         
                     when RX_START =>
                         -- Muestrear en la mitad del bit
-                        if rx_clk_cnt = HALF_DIVISOR then
+                        if rx_clk_cnt = baud_half then
                             if rx_filtered = '0' then
                                 -- Start bit válido
                                 rx_clk_cnt <= 0;
@@ -217,7 +221,7 @@ begin
                         end if;
                         
                     when RX_DATA =>
-                        if rx_clk_cnt = DIVISOR - 1 then
+                        if rx_clk_cnt = baud_divisor - 1 then
                             rx_clk_cnt <= 0;
                             rx_data_reg(rx_bit_cnt) <= rx_filtered;
                             if rx_bit_cnt = 7 then
@@ -230,7 +234,7 @@ begin
                         end if;
                         
                     when RX_STOP =>
-                        if rx_clk_cnt = DIVISOR - 1 then
+                        if rx_clk_cnt = baud_divisor - 1 then
                             if rx_filtered = '1' then
                                 -- Stop bit válido
                                 if rx_valid = '1' then
@@ -265,11 +269,33 @@ begin
         end if;
     end process;
     
+    -- ========== REGISTROS DE BAUDRATE ==========
+    process(clk)
+        variable temp_divisor : integer range 0 to 65535;
+    begin
+        if rising_edge(clk) then
+            if rst_n = '0' then
+                baud_divisor <= DIVISOR;
+                baud_half <= HALF_DIVISOR;
+            elsif cs = '1' and wr = '1' then
+                if addr = "10" then  -- BAUD_LO
+                    temp_divisor := (baud_divisor / 256) * 256 + to_integer(unsigned(data_in));
+                    baud_divisor <= temp_divisor;
+                    baud_half <= temp_divisor / 2;
+                elsif addr = "11" then  -- BAUD_HI
+                    temp_divisor := (to_integer(unsigned(data_in)) * 256) + (baud_divisor mod 256);
+                    baud_divisor <= temp_divisor;
+                    baud_half <= temp_divisor / 2;
+                end if;
+            end if;
+        end if;
+    end process;
+    
     -- Generar IRQ
     uart_irq <= (tx_ready and tx_irq_en) or (rx_valid and rx_irq_en);
 
     -- ========== BUS DE DATOS ==========
-    process(cs, rd, addr, rx_buffer, tx_ready, rx_valid, tx_busy, rx_error, rx_overrun, tx_irq_en, rx_irq_en)
+    process(cs, rd, addr, rx_buffer, tx_ready, rx_valid, tx_busy, rx_error, rx_overrun, tx_irq_en, rx_irq_en, baud_divisor)
     begin
         data_out <= (others => '0');
         if cs = '1' and rd = '1' then
@@ -278,8 +304,10 @@ begin
                     data_out <= rx_buffer;
                 when "01" =>  -- STATUS
                     data_out <= "000" & rx_overrun & rx_error & tx_busy & rx_valid & tx_ready;
-                when "10" =>  -- CONTROL (lectura)
-                    data_out <= "000000" & rx_irq_en & tx_irq_en;
+                when "10" =>  -- BAUD_LO (lectura)
+                    data_out <= std_logic_vector(to_unsigned(baud_divisor mod 256, 8));
+                when "11" =>  -- BAUD_HI (lectura)
+                    data_out <= std_logic_vector(to_unsigned(baud_divisor / 256, 8));
                 when others =>
                     data_out <= (others => '0');
             end case;

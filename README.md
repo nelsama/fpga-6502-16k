@@ -62,12 +62,50 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 | `$C013` | TX/RX Data |
 | `$C014` | Command/Status |
 
-### Registros UART (115200 baud, 8N1)
+### Registros UART (115200 baud por defecto, 8N1)
 
-| Dirección | Lectura | Escritura |
-|-----------|---------|----------|
-| `$C020` | RX Data | TX Data |
-| `$C021` | Status | Control |
+| Dirección | Lectura | Escritura | Descripción |
+|-----------|---------|-----------|-------------|
+| `$C020` | RX Data | TX Data | Recepción/transmisión de datos |
+| `$C021` | Status | Control | Estado del UART / Control de interrupciones |
+| `$C022` | BAUD_LO | BAUD_LO | Divisor de baudrate byte bajo (bits 7:0) |
+| `$C023` | BAUD_HI | BAUD_HI | Divisor de baudrate byte alto (bits 15:8) |
+
+**Status Register ($C021) bits de lectura:**
+- Bit 0: TX_READY - Listo para transmitir
+- Bit 1: RX_VALID - Dato recibido disponible
+- Bit 2: TX_BUSY - Transmitiendo
+- Bit 3: RX_ERROR - Error de frame
+- Bit 4: RX_OVERRUN - Dato perdido (no leído a tiempo)
+
+**Control Register ($C021) bits de escritura:**
+- Bit 0: TX_IRQ_EN - Habilitar IRQ cuando TX listo
+- Bit 1: RX_IRQ_EN - Habilitar IRQ cuando RX válido
+- Bit 7: RESET_FLAGS - Limpiar flags de error
+
+**Configuración de Baudrate:**
+
+El divisor de baudrate se calcula como: `DIVISOR = CLK_FREQ / BAUD_RATE`
+
+Para reloj de 6.75 MHz:
+
+| Baud Rate | Divisor (dec) | Divisor (hex) | BAUD_HI | BAUD_LO |
+|-----------|---------------|---------------|---------|---------|
+| 9600 | 703 | $02BF | $02 | $BF |
+| 19200 | 351 | $015F | $01 | $5F |
+| 38400 | 175 | $00AF | $00 | $AF |
+| 57600 | 117 | $0075 | $00 | $75 |
+| **115200** | **58** | **$003A** | **$00** | **$3A** |
+
+**Ejemplo de cambio de baudrate a 9600:**
+```asm
+    LDA #$BF
+    STA $C022       ; BAUD_LO = $BF
+    LDA #$02
+    STA $C023       ; BAUD_HI = $02
+```
+
+Si no se escriben estos registros, el UART mantiene 115200 baudios por defecto.
 
 ### Registros Timer/RTC
 
@@ -88,8 +126,6 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 | `$C03C` | LATCH_CTL | Control de latch |
 
 **TIMER_CTL bits:** EN(0), IRQ_EN(1), REPEAT(2), IRQ_FLAG(3), ZERO(7)
-
-**Status bits (lectura):** TX_READY(0), RX_VALID(1), TX_BUSY(2), RX_ERROR(3), RX_OVERRUN(4)
 
 ### Registros SPI Master (SD Card)
 
