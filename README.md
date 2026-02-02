@@ -370,18 +370,61 @@ impl/                         # Archivos de implementación (generados)
 *.gprj                        # Archivo de proyecto Gowin
 ```
 
-## 🛠️ Compilación y Uso
+## 🧰 Requisitos
 
-1. Abrir el proyecto `6502_board_v2_1.gprj` en **Gowin EDA**
-2. Ejecutar síntesis
-3. Ejecutar Place & Route
-4. Generar bitstream
-5. Programar la FPGA con el archivo `.fs`
+### Hardware
+- **Sipeed Tang Nano 9K** - Placa FPGA con chip Gowin GW1NR-9
+- Cable USB-C para programación y alimentación
+- (Opcional) Tarjeta SD para almacenamiento externo vía SPI
+- (Opcional) Altavoz/auriculares para salida de audio SID
 
-## 🧰 Herramientas Requeridas
+### Software
+- **Gowin EDA (FPGA Designer)** - IDE necesario para compilar el proyecto
+  - Descarga gratuita: [http://www.gowinsemi.com/en/support/download_eda/](http://www.gowinsemi.com/en/support/download_eda/)
+  - Versión requerida: 1.9.8 o superior
+  - Requiere registro gratuito para obtener licencia educacional
+  - Compatible con Windows, Linux
+  
+- **Gowin Programmer** - Herramienta para cargar el bitstream en la FPGA
+  - Incluido con Gowin EDA o descarga separada del mismo sitio
+  - Soporta programación SRAM (temporal) y Flash (permanente)
 
-- **Gowin EDA** (GOWIN FPGA Designer)
-- **Gowin Programmer** para cargar el bitstream
+> 💡 **Nota**: Gowin EDA es el software oficial de Gowin Semiconductor para diseño FPGA. Es necesario para abrir los archivos `.gprj` del proyecto y generar el bitstream `.fs` que se carga en la FPGA.
+
+## 🛠️ Compilación y Programación
+
+### 1. Compilar el Proyecto
+
+1. Abrir **Gowin EDA**
+2. Cargar el proyecto: `File → Open` → Seleccionar `6502_board_v3.gprj`
+3. Ejecutar el flujo completo:
+   - **Synthesize** - Síntesis del diseño VHDL
+   - **Place & Route** - Ubicación y ruteo en la FPGA
+   - **Generate Bitstream** - Generar archivo `.fs`
+4. El bitstream generado estará en: `impl/pnr/6502_board_v3.fs`
+
+### 2. Programar la FPGA
+
+**Opción A: Desde Gowin EDA**
+1. Conectar la Tang Nano 9K via USB
+2. Click en el ícono de programación o `Tools → Programmer`
+3. Seleccionar el archivo `.fs` generado
+4. Elegir modo:
+   - **SRAM Mode**: Rápido, se pierde al apagar (para pruebas)
+   - **Flash Mode**: Permanente, se mantiene al apagar
+5. Click en **Program/Configure**
+
+**Opción B: Usando Gowin Programmer standalone**
+1. Abrir **Gowin Programmer**
+2. Detectar dispositivo (debe aparecer GW1NR-9)
+3. Cargar el `.fs` y programar
+
+### 3. Probar el Sistema
+
+Una vez programado:
+- El LED de la placa debería indicar actividad
+- Conectar terminal serie a 115200 baud para comunicación UART
+- La CPU 6502 ejecutará el código almacenado en ROM
 
 ## 📜 Créditos
 
