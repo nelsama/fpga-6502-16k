@@ -381,7 +381,7 @@ impl/                         # Archivos de implementación (generados)
 ### Software
 - **Gowin EDA (FPGA Designer)** - IDE necesario para compilar el proyecto
   - Descarga gratuita: [http://www.gowinsemi.com/en/support/download_eda/](http://www.gowinsemi.com/en/support/download_eda/)
-  - Versión requerida: 1.9.8 o superior
+  - Versión requerida: 1.9.12 o superior
   - Requiere registro gratuito para obtener licencia educacional
   - Compatible con Windows, Linux
   
