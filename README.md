@@ -436,6 +436,12 @@ Una vez programado:
 - **SID 6581 Core**: NetSID Project (implementación VHDL del chip de sonido)
 
 
+## 💖 Apóyame
+
+Si disfrutas de este proyecto, considera apoyarme:
+
+[![Support me on Ko-fi](https://img.shields.io/badge/Ko--fi-Apóyame-FF5E5B?logo=kofi&logoColor=white&style=for-the-badge)](https://ko-fi.com/nelsonfigueroa2k)
+
 ## 📄 Licencia
 
 Este proyecto se distribuye bajo los términos de la **GNU General Public License v3.0 (GPLv3)**.
