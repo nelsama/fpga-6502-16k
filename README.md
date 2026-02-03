@@ -373,7 +373,11 @@ impl/                         # Archivos de implementación (generados)
 ## 🧰 Requisitos
 
 ### Hardware
-- **Sipeed Tang Nano 9K** - Placa FPGA con chip Gowin GW1NR-9
+- **Sipeed Tang Nano 9K** - FPGA de bajo costo pero muy versátil con chip Gowin GW1NR-9
+  - 🛒 **Dónde comprar**: [AliExpress - Tang Nano 9K](https://www.aliexpress.com/w/wholesale-Tang-Nano-9K.html)
+  - 💰 **Precio de referencia**: ~$14-20 USD (varía según vendedor y promociones)
+  - 📊 **Características**: 9K LUTs, 32 bloques BSRAM, 2 PLLs, múltiples periféricos I/O
+  - ✨ **Ventajas**: Precio accesible, ecosistema activo, herramientas gratuitas (Gowin EDA)
 - Cable USB-C para programación y alimentación
 - (Opcional) Tarjeta SD para almacenamiento externo vía SPI
 - (Opcional) Altavoz/auriculares para salida de audio SID
