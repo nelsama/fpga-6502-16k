@@ -4,6 +4,8 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 
 > 🆕 **Versión 16K**: ROM ampliada a 16KB ($8000-$BFFF) para mayor espacio de programa.
 
+Esta versión del hardware es compatible con la versión 2.4.1 del firmware monitor.
+
 ## 🏗️ Arquitectura del Sistema
 
 ```
