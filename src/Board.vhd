@@ -1,10 +1,10 @@
 library ieee;
 use ieee.std_logic_1164.all;
-use ieee.numeric_std.ALL;    
+use ieee.numeric_std.ALL;
 
 --use work.types.all;
 
-entity Board is 
+entity Board is
     port(   CLOCK_27_i: in std_logic;                   -- 27 Mhz
             cpu_clk_out : out std_logic;                    -- 3.375 MHz
             reset_in: in std_logic;
@@ -21,7 +21,16 @@ entity Board is
             spi_miso : in std_logic;
             spi_mosi : out std_logic;
             spi_sclk : out std_logic;
-            spi_cs_n : out std_logic_vector(3 downto 0)
+            spi_cs_n : out std_logic_vector(3 downto 0);
+            -- HDMI (reservado)
+            hdmi_tmds_ck_p_out : out std_logic;
+            hdmi_tmds_ck_n_out : out std_logic;
+            hdmi_tmds_c0_p_out : out std_logic;
+            hdmi_tmds_c0_n_out : out std_logic;
+            hdmi_tmds_c1_p_out : out std_logic;
+            hdmi_tmds_c1_n_out : out std_logic;
+            hdmi_tmds_c2_p_out : out std_logic;
+            hdmi_tmds_c2_n_out : out std_logic
 );
 end Board;
 
@@ -48,11 +57,11 @@ architecture arch of Board is
     signal irq_combined :std_logic := '1';
     signal rom_addr_out  : std_logic_vector(15 downto 0);
     signal sid_audio_data : std_logic_vector(17 downto 0);
-    
+
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
     signal clk_1mhz_counter : integer range 0 to 15 := 0;
-    
+
     -- Reloj de 81 MHz para PWM DAC de 12 bits
     signal clk_81mhz        : std_logic := '0';
     signal pll_lock         : std_logic := '0';
@@ -76,7 +85,7 @@ begin
         lock   => pll_lock,
         clkin  => CLOCK_27_i
     );
-    
+
     -- Usar 81 MHz solo cuando el PLL esté bloqueado, sino usar 27 MHz
     clk_81mhz_safe <= clk_81mhz when pll_lock = '1' else CLOCK_27_i;
 
@@ -231,7 +240,7 @@ begin
             end if;
 
             if addr_bus = x"C001" then
-                port2_ce <= '1'; 
+                port2_ce <= '1';
             end if;
 
             if addr_bus = x"C002" then
@@ -245,11 +254,11 @@ begin
             if (addr_bus >= x"0000") and (addr_bus <= x"3FFF") then
                 ram_ce <= '1';
             end if;
-            
+
         end if;
     end process;
 
-    
+
     data_bus_mux : entity work.data_bus_mux
     port map(
         clk=>system_clk,
@@ -314,7 +323,7 @@ begin
                 else
                     port_1(i) <= 'Z';           -- Modo entrada (alta impedancia)
                 end if;
-                
+
                 if cfg_p2_reg(i) = '0' then
                     port_2(i) <= port_out2(i);  -- Modo salida
                 else

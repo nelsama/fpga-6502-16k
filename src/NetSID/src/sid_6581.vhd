@@ -55,7 +55,7 @@ entity sid6581 is
 		pot_y				: in std_logic;	-- paddle input-Y
 		audio_out		: out std_logic;		-- this line holds the audio-signal in PWM format
 		audio_data	: out std_logic_vector(17 downto 0);
-		
+
 		-- Envelope outputs for all 3 voices (active VU meter support)
 		env1_out		: out std_logic_vector(7 downto 0);
 		env2_out		: out std_logic_vector(7 downto 0);
@@ -64,6 +64,8 @@ entity sid6581 is
 end sid6581;
 
 architecture Behavioral of sid6581 is
+
+	signal audio_data_int : std_logic_vector(17 downto 0);
 
 	--Implementation Digital to Analog converter
 	component pwm_sddac is
@@ -92,7 +94,7 @@ architecture Behavioral of sid6581 is
 		port (
 			clk_1MHz		: in  std_logic;	-- this line drives the oscilator
 			reset				: in  std_logic;	-- active high signal (i.e. registers are reset when reset=1)
-			Freq_lo			: in  std_logic_vector(7 downto 0);	-- 
+			Freq_lo			: in  std_logic_vector(7 downto 0);	--
 			Freq_hi			: in  std_logic_vector(7 downto 0);	--
 			Pw_lo				: in  std_logic_vector(7 downto 0);	--
 			Pw_hi				: in  std_logic_vector(3 downto 0);	--
@@ -197,10 +199,10 @@ begin
 		port map(
 			clk_i     => clk_DAC,
 			reset     => reset,
-			dac_i     => audio_data(17 downto 6),
+			dac_i     => audio_data_int(17 downto 6),
 			dac_o     => audio_out
 		);
-	
+
 	paddle_x: pwm_sdadc
 		port map (
 			clk			=> clk_1MHz,
@@ -316,7 +318,7 @@ begin
   voice2_signed <= signed(voice_2 & "0") - 4096;
   voice3_signed <= signed(voice_3 & "0") - 4096;
 
-  filters: sid_filters 
+  filters: sid_filters
   port map (
     clk       => clk32,
     rst       => reset,
@@ -339,7 +341,7 @@ begin
 
     unsigned_filt <= std_logic_vector(filtered_audio + "1000000000000000000");
     unsigned_audio <= unsigned_filt(18 downto 1);
-    audio_data <= unsigned_audio;
+    audio_data_int <= unsigned_audio;
 
 end block;
 
@@ -411,7 +413,7 @@ begin
 				if (we='1') then	-- Write to SID-register
 							------------------------
 					case addr is
-						-------------------------------------- Voice-1	
+						-------------------------------------- Voice-1
 						when "00000" =>	Voice_1_Freq_lo	<= di;
 						when "00001" =>	Voice_1_Freq_hi	<= di;
 						when "00010" =>	Voice_1_Pw_lo		<= di;
@@ -456,7 +458,7 @@ begin
 						--------------------------------------
 --						when others	=>	null;
 						when others	=>	do_buf <= (others => '0');
-					end case;		
+					end case;
 				end if;
 			end if;
 		end if;
@@ -467,5 +469,7 @@ end process;
 env1_out <= Voice_1_Env;
 env2_out <= Voice_2_Env;
 env3_out <= Misc_Env3;
+
+    audio_data <= audio_data_int;
 
 end Behavioral;
