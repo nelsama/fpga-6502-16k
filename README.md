@@ -327,14 +327,25 @@ Pin 33 ──[3.3kΩ]──┬──[4.7nF]── GND
 |-------|-----|------|-------------|
 | `CLOCK_27_i` | 52 | LVCMOS33 | Reloj de entrada 27 MHz |
 | `reset_in` | 4 | LVCMOS18 | Botón de reset (pull-up) |
-| `cpu_clk_out` | 35 | LVCMOS33 | Salida reloj CPU 3.375 MHz |
+| `cpu_clk_out` | 28 | LVCMOS33 | Salida reloj CPU 3.375 MHz |
 | `uart_tx` | 32 | LVCMOS33 | UART TX → USB-TTL RX |
 | `uart_rx` | 31 | LVCMOS33 | UART RX ← USB-TTL TX |
-| `sid_audio_out` | 33 | LVCMOS33 | SID Audio PWM output |
+| `sid_audio_out` | 76 | LVCMOS33 | SID Audio PWM output |
 | `i2c_scl` | 48 | LVCMOS33 | I2C Clock (pull-up) |
 | `i2c_sda` | 49 | LVCMOS33 | I2C Data (pull-up) |
-| `port_1[0:7]` | 70-77 | LVCMOS33 | GPIO Puerto 1 (8 bits) |
+| `port_1[0]` | 42 | LVCMOS33 | GPIO bit 0 |
+| `port_1[1]` | 41 | LVCMOS33 | GPIO bit 1 |
+| `port_1[2]` | 35 | LVCMOS33 | GPIO bit 2 |
+| `port_1[3]` | 40 | LVCMOS33 | GPIO bit 3 |
+| `port_1[4]` | 34 | LVCMOS33 | GPIO bit 4 |
+| `port_1[5]` | 33 | LVCMOS33 | GPIO bit 5 |
+| `port_1[6]` | 30 | LVCMOS33 | GPIO bit 6 |
+| `port_1[7]` | 29 | LVCMOS33 | GPIO bit 7 |
 | `port_2[0:5]` | 10-16 | LVCMOS18 | GPIO Puerto 2 (6 bits) |
+| `hdmi_tmds_ck` | 69/68 | LVCMOS33 | HDMI TMDS Clock |
+| `hdmi_tmds_c0` | 71/70 | LVCMOS33 | HDMI TMDS Channel 0 (Blue) |
+| `hdmi_tmds_c1` | 73/72 | LVCMOS33 | HDMI TMDS Channel 1 (Green) |
+| `hdmi_tmds_c2` | 75/74 | LVCMOS33 | HDMI TMDS Channel 2 (Red) |
 
 ## 📂 Estructura del Proyecto
 
