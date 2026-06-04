@@ -63,9 +63,11 @@ IO_PORT "uart_tx" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8 BANK_VCCIO=3.3;
 IO_LOC "uart_rx" 31;
 IO_PORT "uart_rx" IO_TYPE=LVCMOS33 PULL_MODE=UP BANK_VCCIO=3.3;
 
-// SID Audio (BANK1 - 3.3V)
-IO_LOC "sid_audio_out" 76;
-IO_PORT "sid_audio_out" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+// Audio (BANK1 - 3.3V)
+IO_LOC "audio_out_l" 76;
+IO_PORT "audio_out_l" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "audio_out_r" 77;
+IO_PORT "audio_out_r" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
 
 // SPI (BANK2 - 3.3V)
 IO_LOC "spi_mosi" 37;

@@ -16,7 +16,8 @@ entity Board is
             uart_tx : out std_logic;
             uart_rx : in std_logic;
             -- SID Audio
-            sid_audio_out : out std_logic;
+            audio_out_l : out std_logic;
+            audio_out_r : out std_logic;
             -- SPI Flash
             spi_miso : in std_logic;
             spi_mosi : out std_logic;
@@ -57,6 +58,8 @@ architecture arch of Board is
     signal irq_combined :std_logic := '1';
     signal rom_addr_out  : std_logic_vector(15 downto 0);
     signal sid_audio_data : std_logic_vector(17 downto 0);
+
+    signal audio_out_mono :std_logic;
 
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
@@ -220,9 +223,12 @@ begin
         cpu_data_in=>data_bus,
         cpu_data_out=>data_bus,
         cpu_rw=>r_w,
-        audio_out=>sid_audio_out,
+        audio_out=>audio_out_mono,
         audio_data=>sid_audio_data
     );
+
+    audio_out_l<=audio_out_mono;
+    audio_out_r<=audio_out_mono;
 
     ce_sync: process (system_clk) is
     begin
