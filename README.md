@@ -323,29 +323,64 @@ Pin 33 ──[3.3kΩ]──┬──[4.7nF]── GND
 
 ### Pinout
 
-| Señal | Pin | Tipo | Descripción |
-|-------|-----|------|-------------|
-| `CLOCK_27_i` | 52 | LVCMOS33 | Reloj de entrada 27 MHz |
-| `reset_in` | 4 | LVCMOS18 | Botón de reset (pull-up) |
-| `cpu_clk_out` | 28 | LVCMOS33 | Salida reloj CPU 3.375 MHz |
-| `uart_tx` | 32 | LVCMOS33 | UART TX → USB-TTL RX |
-| `uart_rx` | 31 | LVCMOS33 | UART RX ← USB-TTL TX |
-| `sid_audio_out` | 76 | LVCMOS33 | SID Audio PWM output |
-| `i2c_scl` | 48 | LVCMOS33 | I2C Clock (pull-up) |
-| `i2c_sda` | 49 | LVCMOS33 | I2C Data (pull-up) |
-| `port_1[0]` | 42 | LVCMOS33 | GPIO bit 0 |
-| `port_1[1]` | 41 | LVCMOS33 | GPIO bit 1 |
-| `port_1[2]` | 35 | LVCMOS33 | GPIO bit 2 |
-| `port_1[3]` | 40 | LVCMOS33 | GPIO bit 3 |
-| `port_1[4]` | 34 | LVCMOS33 | GPIO bit 4 |
-| `port_1[5]` | 33 | LVCMOS33 | GPIO bit 5 |
-| `port_1[6]` | 30 | LVCMOS33 | GPIO bit 6 |
-| `port_1[7]` | 29 | LVCMOS33 | GPIO bit 7 |
-| `port_2[0:5]` | 10-16 | LVCMOS18 | GPIO Puerto 2 (6 bits) |
-| `hdmi_tmds_ck` | 69/68 | LVCMOS33 | HDMI TMDS Clock |
-| `hdmi_tmds_c0` | 71/70 | LVCMOS33 | HDMI TMDS Channel 0 (Blue) |
-| `hdmi_tmds_c1` | 73/72 | LVCMOS33 | HDMI TMDS Channel 1 (Green) |
-| `hdmi_tmds_c2` | 75/74 | LVCMOS33 | HDMI TMDS Channel 2 (Red) |
+```
+==================================================================================================
+                 MAPA DE IMPLEMENTACIÓN DE PINES (Sipeed Tang Nano 9K)
+                    Mapeo visual completo basado en tu archivo .cst
+==================================================================================================
+  Leyenda Eléctrica y de Bancos:
+  ⚪ BANK3 (1.8V)  |  🔵 BANK2 (3.3V)  |  🟢 BANK1 (3.3V)  |  🔴 Power  |  ⚫ GND
+==================================================================================================
+
+                        ┌────────────────────────────────────────┐
+                        │              CONECTOR USB-C            │
+                        └────────────────────────────────────────┘
+                         [S2]                                [S1]
+                         ──┐                                  ┌──
+                           │                                  │
+  🔵 [ spi_cs_n[0] ]  38 ──┼─ IOB31B                  IOR5A  ─┼── 63  [    LIBRE    ] 🟢
+  🔵 [  spi_mosi   ]  37 ──┼─ IOB31A                  IOT8A  ─┼── 86  [    LIBRE    ] ⚪
+  🔵 [  spi_sclk   ]  36 ──┼─ IOB29B                  IOT8B  ─┼── 85  [    LIBRE    ] ⚪
+  🔵 [  spi_miso   ]  39 ──┼─ IOB33A                  IOT10A ─┼── 84  [    LIBRE    ] ⚪
+                           │                                  │
+  🔵 [ spi_cs_n[1] ]  25 ──┼─ IOB8A                   IOT10B ─┼── 83  [    LIBRE    ] ⚪
+  🔵 [ spi_cs_n[2] ]  26 ──┼─ IOB8B                   IOT11A ─┼── 82  [    LIBRE    ] ⚪
+  🔵 [ spi_cs_n[3] ]  27 ──┼─ IOB11A                  IOT11B ─┼── 81  [    LIBRE    ] ⚪
+  🔵 [ cpu_clk_out ]  28 ──┼─ IOB11B                  IOT12A ─┼── 80  [    LIBRE    ] ⚪
+                           │                                  │
+  🔵 [  port_1[7]  ]  29 ──┼─ IOB13A     ┌─────────┐  IOT12B ─┼── 79  [    LIBRE    ] ⚪
+  🔵 [  port_1[6]  ]  30 ──┼─ IOB13B     │  Gowin  │  IOT37A ─┼── 77  [  audio_out_r ] 🟢
+  🔵 [  port_1[5]  ]  33 ──┼─ IOB23A     │ GW1NR-9 │  IOT37B ─┼── 76  [  audio_out_l ] 🟢
+  🔵 [  port_1[4]  ]  34 ──┼─ IOB23B     │ 2103C   │  IOT38A ─┼── 75  [hdmi_tmds_c2_p] 🟢
+  🔵 [  port_1[3]  ]  40 ──┼─ IOB33B     └─────────┘  IOT38B ─┼── 74  [hdmi_tmds_c2_n] 🟢
+  🔵 [  port_1[2]  ]  35 ──┼─ IOB29A                  IOT39A ─┼── 73  [hdmi_tmds_c1_p] 🟢
+  🔵 [  port_1[1]  ]  41 ──┼─ IOB41A                  IOT39B ─┼── 72  [hdmi_tmds_c1_n] 🟢
+  🔵 [  port_1[0]  ]  42 ──┼─ IOB41B                  IOT41A ─┼── 71  [hdmi_tmds_c0_p] 🟢
+                           │                                  │
+  🟢 [    LIBRE    ]  51 ──┼─ IOR17B                  IOT41B ─┼── 70  [hdmi_tmds_c0_n] 🟢
+  🟢 [    LIBRE    ]  53 ──┼─ IOR15B                    VCC  ─┼── 5V  [      5V      ] 🔴
+  🟢 [    LIBRE    ]  54 ──┼─ IOR15A                  IOR24B ─┼── 48  [   i2c_scl    ] 🟢
+  🟢 [    LIBRE    ]  55 ──┼─ IOR14B                  IOR24A ─┼── 49  [   i2c_sda    ] 🟢
+  🟢 [    LIBRE    ]  56 ──┼─ IOR14A                  IOB15A ─┼── 31  [   uart_rx    ] 🔵
+  🟢 [    LIBRE    ]  57 ──┼─ IOR13A                  IOB15B ─┼── 32  [   uart_tx    ] 🔵
+                           │                                  │
+  🟢 [hdmi_tmds_ck_n] 68 ──┼─ IOT42B                    GND  ─┼── GND [     GND      ] ⚫
+  🟢 [hdmi_tmds_ck_p] 69 ──┼─ IOT42A                    VCC  ─┼── 3V3 [     3V3      ] 🔴
+                           │                                  │
+                         ──┴──────────────────────────────────┴──
+                        ┌────────────────────────────────────────┐
+                        │             PUERTO HDMI NATIVO         │
+                        └────────────────────────────────────────┘
+
+==================================================================================================
+ ⚪ OTROS PINES INTERNOS BANK3 (1.8V) - Sin conector físico en los bordes:
+--------------------------------------------------------------------------------------------------
+ [ Pin 4 ] -> reset_in    | [ Pin 10] -> port_2[0] | [ Pin 11] -> port_2[1] | [ Pin 13] -> port_2[2]
+ [ Pin 14] -> port_2[3]   | [ Pin 15] -> port_2[4] | [ Pin 16] -> port_2[5]
+--------------------------------------------------------------------------------------------------
+ 🟢 CRISTAL INTEGRADO (BANK1): [ Pin 52 ] -> CLOCK_27_i (Oscilador base de la placa)
+==================================================================================================
+```
 
 ## 📂 Estructura del Proyecto
 
