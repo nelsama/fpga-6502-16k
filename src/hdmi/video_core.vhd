@@ -186,8 +186,8 @@ architecture rtl of video_core is
     --   paleta 3: TEXTO VERDE  (negro/gris/marron/VERDE)
     constant PALETTE : pal_t := (
         x"000", x"00A", x"0CF", x"FFF",   -- paleta 0 - TEXTO / cielo (azul / cian / blanco)
-        x"000", x"A64", x"751", x"FFF",   -- paleta 1 - TERRENO (marron claro / marron oscuro / blanco)
-        x"000", x"0A0", x"642", x"0F0",   -- paleta 2 - ARBOL (verde / marron / verde)
+        x"000", x"A62", x"AAA", x"FFF",   -- paleta 1 - TERRENO (tierra marron / piedra gris / blanco)
+        x"000", x"0A0", x"060", x"0F0",   -- paleta 2 - VEGETACION (verde / verde oscuro / verde)
         x"000", x"888", x"840", x"0F0"    -- paleta 3 - TEXTO VERDE
     );
 
@@ -457,12 +457,13 @@ begin
 
     -- ========================================================================
     -- DIRECCION DE CELDA (combinacional) -> tilemap y atributos
-    --   cell_addr = (y_world/8) * map_stride + (x_world/8)   [mod 2048]
+    --   cell_addr = (y_world/8 mod 30) * 40 + (x_world/8 mod 40)   [mod 2048]
+    --   Tanto x_cell como y_cell envuelven dentro del mapa (40x30) para que
+    --   el scroll NO se cuele en la fila/columna siguiente (wrap espurio).
+    --   Permite scroll horizontal y vertical con envoltura limpia.
     -- ========================================================================
-    x_cell    <= x0_world(10 downto 3);
-    y_cell    <= y0_world(10 downto 3);
-    -- cell_addr con ancho de mapa FIJO de 40 celdas (estado validado).
-    -- (el scroll se aparca; se conserva x0_world por si se retoma)
+    x_cell    <= x0_world(10 downto 3) mod 40;
+    y_cell    <= y0_world(10 downto 3) mod 30;
     cell_addr <= resize(y_cell * to_unsigned(40, 6), 11) + resize(x_cell, 11);
 
     -- ========================================================================
@@ -725,8 +726,8 @@ begin
                         when 6 => p0 := x"7E"; p1 := x"00";
                         when others => p0 := x"3C"; p1 := x"00";
                     end case;
-                when 3 =>        -- TRONCO (color 2 = marron)
-                    p0 := x"00"; p1 := x"18";
+                when 3 =>        -- TRONCO (color 1 = marron)
+                    p0 := x"18"; p1 := x"00";
                 when 4 =>        -- NUBE (blanca, forma redondeada)
                     case r is
                         when 0 => p0 := x"00"; p1 := x"00";
@@ -738,16 +739,16 @@ begin
                         when 6 => p0 := x"FE"; p1 := x"FE";
                         when others => p0 := x"7C"; p1 := x"7C";
                     end case;
-                when 5 =>        -- PIEDRA (color 2, solida)
+                when 5 =>        -- PIEDRA (fondo tierra color 1, piedra color 2)
                     case r is
-                        when 0 => p0 := x"00"; p1 := x"00";
-                        when 1 => p0 := x"00"; p1 := x"18";
-                        when 2 => p0 := x"00"; p1 := x"3C";
-                        when 3 => p0 := x"00"; p1 := x"7E";
-                        when 4 => p0 := x"00"; p1 := x"7E";
-                        when 5 => p0 := x"00"; p1 := x"3C";
-                        when 6 => p0 := x"00"; p1 := x"18";
-                        when others => p0 := x"00"; p1 := x"00";
+                        when 0 => p0 := x"FF"; p1 := x"00";
+                        when 1 => p0 := x"FF"; p1 := x"18";
+                        when 2 => p0 := x"FF"; p1 := x"3C";
+                        when 3 => p0 := x"FF"; p1 := x"7E";
+                        when 4 => p0 := x"FF"; p1 := x"7E";
+                        when 5 => p0 := x"FF"; p1 := x"3C";
+                        when 6 => p0 := x"FF"; p1 := x"18";
+                        when others => p0 := x"FF"; p1 := x"00";
                     end case;
                 when 6 =>        -- PIEDRA 2 (color 1 + 2)
                     case r is

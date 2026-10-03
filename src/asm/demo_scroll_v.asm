@@ -1,18 +1,20 @@
 ; ============================================
-; video_test.asm -- DEMO DE SCROLL v2
+; demo_scroll_v.asm -- DEMO DE SCROLL VERTICAL
 ;
-; Mapa 40x30, scroll horizontal.
+; Mapa 40x30, scroll VERTICAL (scroll_y).
 ;   - Cielo: BG_COLOR (azul), sin tiles (espacio transparente)
 ;   - Nubes blancas en el cielo
 ;   - Cesped (fila 22) y tierra texturizada (filas 23..29)
 ;   - Arboles (copa verde + tronco marron)
+;
+; Con y_cell mod 30 (fase 6), el mapa envuelve limpiamente en vertical.
 ;
 ; Zero page (SIN solapamiento):
 ;   $10 CUR_LO   $11 CUR_HI
 ;   $12 TILE     $13 PAL
 ;   $14 ROW      $15 COL
 ;   $16 I        $17 J
-;   $18 SCX_LO   $19 SCX_HI  $1A SLOW
+;   $18 SCY_LO   $19 SCY_HI  $1A SLOW
 ; ============================================
 
     .setcpu "6502"
@@ -30,8 +32,8 @@ ROW     = $14
 COL     = $15
 I       = $16
 J       = $17
-SCX_LO  = $18
-SCX_HI  = $19
+SCY_LO  = $18
+SCY_HI  = $19
 SLOW    = $1A
 
     .segment "CODE"
@@ -58,10 +60,10 @@ d2:
     BNE d2
 
     LDA #0
-    STA SCX_LO
-    STA SCX_HI
-    STA $D804
-    STA $D805
+    STA SCY_LO
+    STA SCY_HI
+    STA $D806
+    STA $D807
 
     ; ============================================
     ; 1) TERRENO: filas 22..29
@@ -114,7 +116,7 @@ do_put:
 
     ; ============================================
     ; 2) ARBOLES: columnas 5, 15, 25, 35
-    ;    copa filas 15-16, tronco fila 17
+    ;    copa filas 19-20, tronco fila 21
     ; ============================================
     LDA #0
     STA I
@@ -194,7 +196,7 @@ cloud_loop:
     BNE cloud_loop
 
     ; ============================================
-    ; 4) SCROLL
+    ; 4) SCROLL VERTICAL
     ; ============================================
     LDA #0
     STA SLOW
@@ -208,14 +210,14 @@ wvb2:
     AND #$80
     BNE wvb2
     ; scroll a 1 px por frame (velocidad maxima con VBLANK)
-    INC SCX_LO
+    INC SCY_LO
     BNE sn
-    INC SCX_HI
+    INC SCY_HI
 sn:
-    LDA SCX_LO
-    STA $D804
-    LDA SCX_HI
-    STA $D805
+    LDA SCY_LO
+    STA $D806
+    LDA SCY_HI
+    STA $D807
     JMP scroll_loop
 
 done:
@@ -246,7 +248,7 @@ put_cell:
 calc_cell:
     ; CUR = ROW*32 + ROW*8 + COL
     LDA ROW
-    STA J                ; J = ROW (preservado en zero page aparte)
+    STA J                ; J = ROW
     ; low = ROW*32
     LDA J
     ASL A

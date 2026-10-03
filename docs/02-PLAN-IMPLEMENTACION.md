@@ -396,19 +396,23 @@ El sistema de sprites costó ~+800 LUTs y +1 bloque BSRAM (banco de patrones de 
 
 ---
 
-### Fase 6 — Scroll y split de raster ✅ COMPLETADA (scroll horizontal)
+### Fase 6 — Scroll y split de raster ✅ COMPLETADA (horizontal y vertical)
 
-**Objetivo:** scroll fluido. → **VALIDADO** (horizontal con envoltura)
+**Objetivo:** scroll fluido. → **VALIDADO** (horizontal y vertical, con envoltura)
 
 | Tarea | Estado |
 |-------|--------|
 | Registros de scroll X/Y (`$D804`–`$D807`) | ✅ |
-| `x0_world = x0_log + scroll_x` (scroll fino) | ✅ |
+| `x0_world = x0_log + scroll_x` / `y0_world = y0_log + scroll_y` | ✅ |
 | Captura del scroll al inicio de frame | ✅ |
-| Envoltura (mapa de 40, `cell_addr` truncado) | ✅ |
-| Scroll vertical | ⏳ mismo mecanismo, pendiente de probar |
+| Envoltura horizontal (`x_cell mod 40`) | ✅ |
+| Envoltura vertical (`y_cell mod 30`) | ✅ |
 | Scroll por línea (split de raster) | ⏳ pendiente |
 | Tilemap doble (sin tearing en mapa grande) | ⏳ pendiente |
+
+**Entregable cumplido:** demos de paisaje (cielo azul, nubes, árboles, césped,
+terreno texturizado) desplazándose suavemente en horizontal (`demo_scroll_h.asm`)
+y en vertical (`demo_scroll_v.asm`).
 
 **Entregable cumplido:** demo de paisaje (cielo azul, nubes, árboles, césped,
 terreno texturizado) desplazándose suavemente.
@@ -602,7 +606,7 @@ habilitación hacia el motor de vídeo. Es el bug que tiene hoy el SID.
 
 **Opciones para continuar:**
 
-1. **Fase 6 (scroll)** — scroll por hardware y split de raster.
+1. **Fase 6 (scroll)** — ✅ completada (horizontal y vertical).
 2. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
 3. **Cursor / scroll de texto** — rutina de consola en software.
 4. **Fase 8 (bitmap)** — requiere decidir el reparto de BSRAM (agotada).

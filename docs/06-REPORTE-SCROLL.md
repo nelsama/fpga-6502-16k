@@ -2,7 +2,7 @@
 
 **Proyecto:** fpga-6502-16k
 **Fecha:** 2026-10-03
-**Estado:** scroll **VALIDADO** (scroll horizontal suave, con demo de terreno/árboles/nubes)
+**Estado:** scroll **VALIDADO en horizontal y vertical** (demos de terreno/árboles/nubes)
 
 ---
 
@@ -133,9 +133,19 @@ un problema**, solo se eliminó la variable.
 
 ### 4.3 Resultado final
 
-El scroll horizontal se **validó** con `cell_addr` fijo a 40 y `x0_world = x0_log + scroll_x`.
-Funciona suave, con envoltura. El stride variable (mapas de 64+) sigue pendiente si
-se desea.
+El scroll se **validó** con `cell_addr` fijo a 40 y `x0_world = x0_log + scroll_x` /
+`y0_world = y0_log + scroll_y`. Funciona suave, con envoltura, tanto en horizontal
+como en vertical. El stride variable (mapas de 64+) sigue pendiente si se desea.
+
+### 4.4 Envoltura vertical (`y_cell mod 30`)
+
+Inicialmente solo `x_cell` envolvía (`mod 40`). Al hacer scroll vertical, `y_cell`
+se colaba en la fila siguiente (wrap espurio: aparecían tiles de basura). Se añadió
+`y_cell <= y0_world(10 downto 3) mod 30`, idéntico al caso horizontal. Sin coste de
+recursos (4.572 LUTs, sin cambios respecto a la versión solo-horizontal).
+
+**Nota:** para mapas más altos (ej. 40x50 para shooters verticales) basta cambiar el
+`mod 30` por `mod 50` (50*40 = 2000, cabe en las 2048 celdas de `tile_arr`).
 
 ---
 
@@ -200,6 +210,7 @@ La copa y el tronco se dibujaban lejos del césped. Se reposicionaron: copa fila
 | 10 | El scroll salió "rapidísimo" | velocidad (esperar frame completo) |
 | 11 | Nube "azul con píxeles" | `t: range 0..3` desbordaba |
 | 12 | Scroll suave + demo de terreno/árboles/nubes | **VALIDADO** |
+| 13 | `y_cell mod 30`: envoltura vertical limpia | **VALIDADO** |
 
 ---
 
@@ -215,4 +226,5 @@ El scroll **funciona** (horizontal, suave, con envoltura). El esfuerzo se alarg�
 Con el `video_bus` arreglado, el rango corregido y el método correcto (un cambio por
 build, aritmética verificada en Python), el scroll quedó validado. La demo final
 (terreno texturizado, césped, árboles, nubes, cielo azul) sirve como referencia de
-capacidades del sistema.
+capacidades del sistema, y funciona tanto desplazándose en horizontal
+(`demo_scroll_h.asm`) como en vertical (`demo_scroll_v.asm`).

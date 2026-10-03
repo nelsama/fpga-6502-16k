@@ -31,7 +31,7 @@ eliminar ningún módulo existente.
 **Estado:** Fases 1, 2, 3, 4, 5, 6 y 7 implementadas y validadas en hardware.
 El motor de vídeo soporta tiles multicolor, fondo transparente, sprites con
 line buffer, prioridad, flips X/Y, STATUS (vblank/overflow/ready), **modo texto
-con fuente en BSRAM** y **scroll horizontal**. Siguiente: Fase 8 (bitmap) o
+con fuente en BSRAM** y **scroll horizontal y vertical**. Siguiente: Fase 8 (bitmap) o
 color de texto por celda.
 
 **Modelo:** coprocesador gráfico estilo VIC-II/NES. El software escribe
