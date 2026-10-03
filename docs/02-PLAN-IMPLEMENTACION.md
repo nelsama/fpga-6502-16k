@@ -407,15 +407,12 @@ El sistema de sprites costó ~+800 LUTs y +1 bloque BSRAM (banco de patrones de 
 | Captura del scroll al inicio de frame | ✅ |
 | Envoltura horizontal (`x_cell mod 40`) | ✅ |
 | Envoltura vertical (`y_cell mod 30`) | ✅ |
-| Scroll por línea (split de raster) | ⏳ pendiente |
-| Tilemap doble (sin tearing en mapa grande) | ⏳ pendiente |
+| **Split de raster (scroll por línea)** | ⏳ **movido a Fase 8** |
+| Tilemap doble (sin tearing en mapa grande) | ⏳ opcional, requiere BSRAM |
 
 **Entregable cumplido:** demos de paisaje (cielo azul, nubes, árboles, césped,
 terreno texturizado) desplazándose suavemente en horizontal (`demo_scroll_h.asm`)
 y en vertical (`demo_scroll_v.asm`).
-
-**Entregable cumplido:** demo de paisaje (cielo azul, nubes, árboles, césped,
-terreno texturizado) desplazándose suavemente.
 
 > **Bug de raíz resuelto:** el `video_bus` perdía escrituras (toggle invertido 2×
 > por escritura). Ver `06-REPORTE-SCROLL.md`.
@@ -453,40 +450,68 @@ escrituras del CPU**. Síntoma: fondo correcto pero sin texto.
 
 ---
 
-### Fase 8 — Modo bitmap
+### Fase 8 — Split de raster (scroll por línea) ✅ COMPLETADA
 
-**Objetivo:** lienzo de dibujo pixel a pixel.
+**Objetivo:** varias "bandas" con scroll independiente en la misma pantalla
+(barra de estado fija, parallax, HUD de texto arriba y abajo).
 
-| Tarea | Detalle |
-|-------|---------|
-| Framebuffer 320×240 @ 1bpp | 9.600 B |
-| Datapath alternativo | Leer byte, desplazar |
-| Atributo por celda | Color de 2 valores por celda |
-| Registro de modo | Bit de `$D805` |
+**Estado:** VALIDADO — 3 bandas (HUD superior fijo + paisaje scrolleando + HUD
+inferior fijo).
 
-**Entregable:** dibujar píxeles desde el CPU con un puntero de sprite.
-**Criterio de éxito:** acceso a pixel individual funcional.
+#### Registros implementados ($D809–$D812)
 
-**Coste estimado:** ~250–400 LUT.
-**Riesgo:** R-03 — es el modo que más BSRAM consume (10.800 B).
+| Dir | Registro | Descripción |
+|-----|----------|-------------|
+| `$D809` | `raster_line0` | Fin de la banda SUPERIOR (línea lógica). `$FF` = sin banda top |
+| `$D80A/$D80B` | `band2_x` lo/hi | Scroll X de la banda superior |
+| `$D80C/$D80D` | `band2_y` lo/hi | Scroll Y de la banda superior |
+| `$D80E` | `raster_line1` | Fin de la banda MEDIA. `$FF` = sin banda bottom |
+| `$D80F/$D810` | `band3_x` lo/hi | Scroll X de la banda inferior |
+| `$D811/$D812` | `band3_y` lo/hi | Scroll Y de la banda inferior |
+
+La banda MEDIA usa el scroll normal (`$D804`/`$D806`).
+
+#### Modelo de funcionamiento
+
+```
+final de frame ──> banda 0 (band2_x/y)
+    (vline >= raster_line0) ──> banda 1 (scroll normal)
+    (vline >= raster_line1) ──> banda 2 (band3_x/y)
+```
+
+Las transiciones ocurren en el ULTIMO ciclo de cada línea (`h_cnt = H_TOTAL-1`),
+para que el prefetch de BSRAM de la línea siguiente ya use el scroll correcto.
+
+**Coste real:** 4.572 → 4.699 LUTs (**+127 LUTs**). **BSRAM: 0.** DSP: 0.
+
+#### Lección crítica (desfase de fila 0)
+
+El pipeline presenta la celda con un desfase de **+1 fila** en el borde superior
+(la fila 0 del tilemap queda "fuera" y todo se corre una fila arriba). Es un
+artefacto del prefetch (documentado en `video_core.vhd`, L17-24). **Solución
+práctica:** reservar la fila 0 como margen y dibujar el HUD superior en las filas
+1-2 (como hacen los sistemas de tiles reales). No requiere lógica extra. La demo
+usa `raster_line0 = 24` (banda superior de 3 filas: 0 de margen + 2 de HUD).
 
 ---
 
-### Fase 9 — Rotación y escalado de sprites
+### Fase 9 — Escalado 2× de sprites
 
-**Objetivo:** sprites rotados y escalados.
+**Objetivo:** sprites al doble de tamaño (16×16 y 32×32 efectivos) por hardware.
+(Se **descarta la rotación**: encarece el datapath y no es prioridad.)
 
 | Tarea | Detalle |
 |-------|---------|
-| Tabla de seno/coseno | 256 × 16 bits (0,5 KB BSRAM o registros) |
-| Vector de paso por sprite | 4 multiplicaciones por sprite al inicio del frame |
-| DDA por línea | Acumulador de posición fraccionaria |
-| Campos en OAM | Bits de ángulo y escala |
+| Bit de escala por sprite | campo en OAM (FLAGS), ej. bit4 (reservado hoy) |
+| Repetición de pixel | duplicar bit/hilo o hilo completo según eje |
+| Coordenadas de sprite en OAM | ya soportan el rango necesario |
+| Interacción con line buffer | entrada ocupa 2× ancho por línea |
 
-**Entregable:** sprite rotando y escalando por hardware.
-**Criterio de éxito:** rotación suave sin coste de CPU por frame.
+**Entregable:** sprite 16×16 dibujado a 32×32 sin coste de CPU.
+**Criterio de éxito:** bordes nítidos (bloques 2×2), sin artefactos de line buffer.
 
-**Coste estimado:** ~200–400 LUT + 1 DSP + 0,5 KB BSRAM.
+**Coste estimado:** ~80–150 LUT. **BSRAM: 0.** DSP: 0.
+**Riesgo:** bajo-medio (el line buffer debe manejar el doble de ancho por línea).
 
 ---
 
@@ -504,9 +529,11 @@ escrituras del CPU**. Síntoma: fondo correcto pero sin texto.
 | **Fase 4 (CPU → VRAM)** | **3.681** | **24/26** | **2** | 2026-10-02 |
 | **Fase 5 (sprites + line buffer + STATUS)** | **~4.500** | **25/26** | **2** | 2026-10-02 |
 | **Fase 5 (flips X/Y + fix 9 bits)** | **4.610** | **25/26** | **2** | 2026-10-02 |
+| **Fase 6 (scroll H/V)** | **4.572** | **26/26** | **2** | 2026-10-03 |
 | **Fase 7 (fuente BSRAM + expansión + VIDEO_READY)** | **4.523** | **26/26** | **2** | 2026-10-02 |
+| **Fase 8 (split de raster 3 bandas)** | **4.699** | **26/26** | **2** | 2026-10-03 |
 
-**Margen actual: ~4.117 LUTs (48%) y 0 bloques BSRAM libres (agotada).**
+**Margen actual: ~3.941 LUTs (46%) y 0 bloques BSRAM libres (agotada).**
 
 ### 3.2 Estimación de fases restantes
 
@@ -515,19 +542,19 @@ y sustituirlas por las reales de §3.1.
 
 | Fase | Contenido | LUTs acumuladas | BSRAM | Riesgo |
 |------|-----------|-----------------|-------|--------|
-| **3** | **Tilemap + tileset** | **3.630 (real)** | **23/26** | **Bajo** |
-| **Fase 4** | **CPU→VRAM (programable)** | **3.681 (real)** | **24/26** | **Bajo** |
-| **Fase 5** | **Sprites + line buffer + STATUS** | **~4.500 (real)** | **25/26** | **Bajo** |
-| 6 | Scroll | ~4.700–5.400 | 25/26 | Bajo |
-| 7 | Modo texto | ~4.600–5.300 | 25/26 | Bajo |
-| 8 | Modo bitmap | ~4.900–5.900 | 26/26 | **Medio-alto** (BSRAM) |
-| 9 | Rotación | ~5.100–6.200 | 26/26 | Medio |
+| **8** | **Split de raster (3 bandas)** | **4.699 (real)** | **26/26** | **Bajo** ✅ |
+| **9** | **Escalado 2× de sprites** | **~4.780–4.900** | **26/26** | **Bajo-medio** |
+| — | Colisiones por hardware | +600–900 LUT | 26/26 | Medio (no cabe completo) |
+| — | OAM 32→64 sprites | +600–900 LUT | 26/26 | Medio |
+| — | Line buffer 8→16 | +500–600 LUT | 26/26 | Medio |
+| A | **Análisis del modo bitmap (al final)** | **ver `05-ANALISIS-BITMAP.md`** | **repartir BSRAM** | **Alto** |
 
 > Las estimaciones se han rebajado tras medir que el motor de tiles cuesta solo +42 LUTs
 > (la mayor parte del coste ya estaba en el pipeline de la Fase 2).
 >
-> **El recurso crítico es la BSRAM, no las LUTs.** El modo bitmap (Fase 8) es el único
-> que puede no caber: compite por los 3 bloques libres. Ver §6, D-05 y D-06.
+> **El recurso crítico es la BSRAM, no las LUTs.** El modo bitmap o el tilemap doble
+> (los que necesitan BSRAM) son los únicos que pueden no caber: compiten por bloques
+> ya ocupados. La rotación de sprites queda **descartada**; el escalado 2× no usa BSRAM.
 
 ---
 
@@ -542,12 +569,15 @@ El plan puede detenerse en cualquier fase con un sistema funcional:
 | Tras fase 3 | **Visualizador de imágenes estáticas** (tiles desde BSRAM) ✅ |
 | **Tras fase 4** | **Sistema programable completo** (mínimo para juegos simples) ✅ |
 | **Tras fase 5** | **Sistema de juegos funcional** (objetivo principal) ✅ |
-| Tras fase 6 | Juegos con scroll |
-| Tras fase 8 | Sistema de juegos + herramientas de dibujo |
-| Tras fase 9 | Sistema completo con rotación/escala |
+| **Tras fase 6** | **Juegos con scroll** (H/V) ✅ |
+| Tras fase 7 | Juegos con scroll + consola de texto ✅ |
+| **Tras fase 8** | **Juegos con HUD fijo y parallax** (split de raster) ✅ |
+| Tras fase 9 | Sistema de juegos + sprites escalados 2× |
+| (Análisis A) | Sistema de juegos + herramientas de dibujo (bitmap) |
 
 **El objetivo mínimo viable es la fase 5.** A partir de ahí ya se pueden desarrollar
-juegos reales.
+juegos reales. Las fases 6–9 añaden capacidades de juego (scroll, texto, split de
+raster, escalado).
 
 ---
 
@@ -590,30 +620,38 @@ habilitación hacia el motor de vídeo. Es el bug que tiene hoy el SID.
 |---|----------|----------|--------|
 | D-01 | **Salida de vídeo** | HDMI (pines reservados, +LUTs, +ruido) vs. VGA | ✅ **HDMI** (fase 1) |
 | D-02 | Resolución lógica | 320×240 (2× exacto) vs. 256×240 | ✅ **320×240** |
-| D-03 | Tilemap | Simple vs. doble (scroll sin tearing) | ⏳ pendiente (Fase 6) |
+| D-03 | Tilemap | Simple vs. doble (scroll sin tearing) | ⏳ **opcional** — doble requiere +1 BSRAM (agotada) |
 | D-04 | Patrones | Todo en VRAM vs. base en ROM + dinámicos | ✅ **todo en VRAM** |
 | D-05 | Tiles | 256 @ 2bpp vs. 128 | ✅ **256** (fuente ocupa `$20..$7F`) |
 | D-06 | Vídeo y RAM de juego | ¿VRAM en `$4000` o RAM extra? | ✅ **puerto indirecto `$D800`** (opción B) |
 | D-07 | Código del juego | En ROM vs. cargado de SD a RAM | ✅ **SD → RAM** (monitor en ROM) |
 | D-08 | **Fuente de caracteres** | ROM CPU vs. RAM del juego vs. BSRAM | ✅ **BSRAM** (último bloque, Fase 7) |
-| D-09 | **Modo bitmap** | Resolución/profundidad | ⏳ pendiente — BSRAM agotada, requiere reutilizar |
+| D-09 | **Rotación de sprites** | ¿Implementar o no? | ✅ **DESCARTADA** (no prioritaria) |
+| D-10 | **Escalado de sprites** | ¿2× por hardware? | ✅ **SÍ — Fase 9** |
+| D-11 | **Split de raster** | ¿Implementar? | ✅ **SÍ — Fase 8** |
+| D-12 | **Modo bitmap** | Resolución/profundidad | ⏳ **análisis al final** — BSRAM agotada, requiere repartir |
 
 ---
 
 ## 7. Próximos pasos inmediatos
 
-**Completado:** Fases 1–5 y 7 (tiles, sprites con flips, CPU→VRAM, modo texto).
+**Completado:** Fases 1–8 (tiles, sprites con flips, CPU→VRAM, modo texto, scroll
+H/V, split de raster con HUD fijo arriba/abajo).
 
-**Opciones para continuar:**
+**Prioridad actual (revisada):**
 
-1. **Fase 6 (scroll)** — ✅ completada (horizontal y vertical).
-2. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
-3. **Cursor / scroll de texto** — rutina de consola en software.
-4. **Fase 8 (bitmap)** — requiere decidir el reparto de BSRAM (agotada).
-5. **Optimización de LUTs** — ~4.117 libres (48%).
-6. **Integración con el monitor** — requiere espacio en ROM (llena).
-4. **Medir el audio** con el TMDS activo → valida o invalida R-01.
-5. **Sintetizar** y actualizar las cifras de §3.
+1. **Fase 9 — Escalado 2× de sprites** — sin rotación (descartada).
+2. **Colisiones** sprite-sprite / sprite-tile (por software o hardware parcial).
+3. **Mapa 40×50** para shooters verticales (`mod 30`→`mod 50`).
+4. **Data_bus_mux**: decodificar `$D800–$D807` para lectura fiable de `$D803`.
+5. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
+6. **Cursor / scroll de texto** — rutina de consola en software.
+7. **Integración con el monitor** — cargar juegos de SD a RAM.
+8. **Medir el audio (SID)** con el TMDS activo → valida o invalida R-01.
+
+**Al final (análisis A):** modo bitmap — requiere repartir la BSRAM (agotada).
+
+**Descartado:** rotación de sprites.
 
 ---
 

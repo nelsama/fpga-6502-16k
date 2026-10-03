@@ -251,6 +251,35 @@ Comparación: NES = 25, C64 = 16, Master System = 32.
 | `$D801` | `VID_ADDR_HI` | W | Area (7:6) + pat_hi (5) + dir alta (2:0) |
 | `$D802` | `VID_DATA` | W | Dato; **escribirlo dispara la escritura** |
 | `$D803` | `STATUS` | R | READY (4) + VBLANK (7) + OVERFLOW (6) |
+| `$D804` | `SCROLL_X_LO` | W | Scroll X (banda media), byte bajo |
+| `$D805` | `SCROLL_X_HI` | W | Scroll X, byte alto (bits 2:0) |
+| `$D806` | `SCROLL_Y_LO` | W | Scroll Y (banda media), byte bajo |
+| `$D807` | `SCROLL_Y_HI` | W | Scroll Y, byte alto (bits 2:0) |
+| `$D808` | `MAP_STRIDE` | W | Ancho del mapa en celdas (por defecto 40) |
+
+### 5.3 Registros de split de raster (Fase 8, IMPLEMENTADOS)
+
+Hasta 3 bandas verticales, cada una con scroll independiente:
+
+| Dirección | Nombre | R/W | Descripción |
+|-----------|--------|-----|-------------|
+| `$D809` | `RASTER_LINE0` | W | Fin de la banda SUPERIOR (línea lógica 0..239). `$FF` = sin banda top |
+| `$D80A` | `BAND2_X_LO` | W | Scroll X de la banda superior, byte bajo |
+| `$D80B` | `BAND2_X_HI` | W | Scroll X de la banda superior, bits 2:0 |
+| `$D80C` | `BAND2_Y_LO` | W | Scroll Y de la banda superior, byte bajo |
+| `$D80D` | `BAND2_Y_HI` | W | Scroll Y de la banda superior, bits 2:0 |
+| `$D80E` | `RASTER_LINE1` | W | Fin de la banda MEDIA. `$FF` = sin banda bottom |
+| `$D80F` | `BAND3_X_LO` | W | Scroll X de la banda inferior, byte bajo |
+| `$D810` | `BAND3_X_HI` | W | Scroll X de la banda inferior, bits 2:0 |
+| `$D811` | `BAND3_Y_LO` | W | Scroll Y de la banda inferior, byte bajo |
+| `$D812` | `BAND3_Y_HI` | W | Scroll Y de la banda inferior, bits 2:0 |
+
+La banda MEDIA usa el scroll normal (`$D804`/`$D806`). Si `RASTER_LINE0 = $FF`,
+no hay banda superior y todo arranca en la banda media (equivale a 2 bandas).
+
+> **Desfase de fila 0:** el pipeline presenta la fila 0 del tilemap corrida una
+> fila arriba (artefacto del prefetch). Para un HUD superior, reserva la fila 0
+> como margen y dibuja en las filas 1-2 (ver `02-PLAN-IMPLEMENTACION.md`, Fase 8).
 
 #### Encoding de `$D801`
 

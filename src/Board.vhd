@@ -74,6 +74,12 @@ architecture arch of Board is
     signal vid_sc_x     : std_logic_vector(10 downto 0);
     signal vid_sc_y     : std_logic_vector(10 downto 0);
     signal vid_sc_stride : std_logic_vector(7 downto 0);
+    signal vid_raster_line : std_logic_vector(7 downto 0);
+    signal vid_band2_x  : std_logic_vector(10 downto 0);
+    signal vid_band2_y  : std_logic_vector(10 downto 0);
+    signal vid_raster_line1 : std_logic_vector(7 downto 0);
+    signal vid_band3_x  : std_logic_vector(10 downto 0);
+    signal vid_band3_y  : std_logic_vector(10 downto 0);
 
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
@@ -264,7 +270,13 @@ begin
         cpu_data_out => data_bus,
         sc_x_out     => vid_sc_x,
         sc_y_out     => vid_sc_y,
-        sc_stride    => vid_sc_stride
+        sc_stride    => vid_sc_stride,
+        rl0_out      => vid_raster_line,
+        b2x_out      => vid_band2_x,
+        b2y_out      => vid_band2_y,
+        rl1_out      => vid_raster_line1,
+        b3x_out      => vid_band3_x,
+        b3y_out      => vid_band3_y
     );
 
     video_test_inst : entity work.video_core
@@ -285,6 +297,13 @@ begin
         sc_y_in     => vid_sc_y,
         sc_we       => '0',
         sc_stride   => vid_sc_stride,
+
+        raster_line0 => vid_raster_line,
+        band2_x     => vid_band2_x,
+        band2_y     => vid_band2_y,
+        raster_line1 => vid_raster_line1,
+        band3_x     => vid_band3_x,
+        band3_y     => vid_band3_y,
 
         tmds_c0_p => hdmi_tmds_c0_p_out,
         tmds_c0_n => hdmi_tmds_c0_n_out,

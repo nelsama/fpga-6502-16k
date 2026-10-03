@@ -23,16 +23,17 @@ eliminar ningún módulo existente.
 
 | Recurso | Libre | Necesario | ¿Alcanza? |
 |---------|-------|-----------|-----------|
-| LUTs | 4.117 (48%) | ~800–1.400 | ✅ |
+| LUTs | 4.699 (52%) | ~800–1.400 | ✅ |
 | BSRAM | 0 bloques | 0 | ⚠️ **agotada** |
 | PLL | 1 | 1 | ✅ |
 | DSP | 8 | 1 | ✅ |
 
-**Estado:** Fases 1, 2, 3, 4, 5, 6 y 7 implementadas y validadas en hardware.
+**Estado:** Fases 1, 2, 3, 4, 5, 6, 7 y 8 implementadas y validadas en hardware.
 El motor de vídeo soporta tiles multicolor, fondo transparente, sprites con
 line buffer, prioridad, flips X/Y, STATUS (vblank/overflow/ready), **modo texto
-con fuente en BSRAM** y **scroll horizontal y vertical**. Siguiente: Fase 8 (bitmap) o
-color de texto por celda.
+con fuente en BSRAM**, **scroll horizontal/vertical** y **split de raster (3 bandas:
+HUD fijo arriba/abajo + scroll al medio)**. Siguiente: **Fase 9 (escalado 2× de
+sprites)**. La rotación de sprites queda descartada; el bitmap, como análisis al final.
 
 **Modelo:** coprocesador gráfico estilo VIC-II/NES. El software escribe
 memoria y registros; el hardware genera la señal de forma autónoma.

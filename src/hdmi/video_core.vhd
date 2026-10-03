@@ -62,6 +62,19 @@ entity video_core is
         sc_we       : in  std_logic;                      -- pulso: cargar scroll
         sc_stride   : in  std_logic_vector(7 downto 0);   -- ancho del mapa
 
+        -- Split de raster (Fase 8), hasta 3 bandas:
+        --   raster_line0 : fin de la banda SUPERIOR (banda 2). $FF = sin banda top.
+        --   band2_x/y   : scroll de la banda SUPERIOR.
+        --   raster_line1 : fin de la banda MEDIA. $FF = sin banda bottom.
+        --   band3_x/y   : scroll de la banda INFERIOR.
+        --   La banda MEDIA usa el scroll NORMAL (sc_x_in/sc_y_in).
+        raster_line0 : in  std_logic_vector(7 downto 0);
+        band2_x     : in  std_logic_vector(10 downto 0);
+        band2_y     : in  std_logic_vector(10 downto 0);
+        raster_line1 : in  std_logic_vector(7 downto 0);
+        band3_x     : in  std_logic_vector(10 downto 0);
+        band3_y     : in  std_logic_vector(10 downto 0);
+
         -- Status del video (registro de LECTURA $D803)
         --   bit 7 = VBLANK, bit 6 = SPRITE_OVERFLOW, bit 5 = HIT,
         --   bit 4 = VIDEO_READY (1 = inicializacion de VRAM terminada)
@@ -116,6 +129,19 @@ architecture rtl of video_core is
     signal scx_s1, scx_s2 : std_logic_vector(10 downto 0) := (others => '0');
     signal scy_s1, scy_s2 : std_logic_vector(10 downto 0) := (others => '0');
     signal scs_s1, scs_s2 : std_logic_vector(7 downto 0) := x"28";
+
+    -- split de raster (sincronizado)
+    signal rl0_s1, rl0_s2 : std_logic_vector(7 downto 0) := x"FF";
+    signal b2x_s1, b2x_s2 : std_logic_vector(10 downto 0) := (others => '0');
+    signal b2y_s1, b2y_s2 : std_logic_vector(10 downto 0) := (others => '0');
+    signal rl1_s1, rl1_s2 : std_logic_vector(7 downto 0) := x"FF";
+    signal b3x_s1, b3x_s2 : std_logic_vector(10 downto 0) := (others => '0');
+    signal b3y_s1, b3y_s2 : std_logic_vector(10 downto 0) := (others => '0');
+
+    -- banda activa (0 = superior usa band2,
+    --                1 = media usa scroll normal,
+    --                2 = inferior usa band3)
+    signal band_idx       : unsigned(1 downto 0) := "00";
 
     signal hs : std_logic := '1';
     signal vs : std_logic := '1';
@@ -412,6 +438,7 @@ begin
     --   barrido (si cambiara a mitad de linea, el motor leeria celdas mezcladas
     --   y la imagen se romperia).
     process (clk_pixel)
+        variable vline : integer;
     begin
         if rising_edge(clk_pixel) then
             scx_s1 <= sc_x_in;
@@ -420,10 +447,49 @@ begin
             scy_s2 <= scy_s1;
             scs_s1 <= sc_stride;
             scs_s2 <= scs_s1;
-            if (h_cnt = 0) and (v_cnt = 0) then
-                scroll_x   <= unsigned(scx_s2);
-                scroll_y   <= unsigned(scy_s2);
+            rl0_s1 <= raster_line0;
+            rl0_s2 <= rl0_s1;
+            b2x_s1 <= band2_x;
+            b2x_s2 <= b2x_s1;
+            b2y_s1 <= band2_y;
+            b2y_s2 <= b2y_s1;
+            rl1_s1 <= raster_line1;
+            rl1_s2 <= rl1_s1;
+            b3x_s1 <= band3_x;
+            b3x_s2 <= b3x_s1;
+            b3y_s1 <= band3_y;
+            b3y_s2 <= b3y_s1;
+
+            vline := to_integer(v_cnt(9 downto 1));
+
+            -- TRANSICIONES DE BANDA en el ULTIMO ciclo de cada linea
+            --   (h_cnt = H_TOTAL-1), para que el prefetch de la linea siguiente
+            --   ya use el scroll/banda correctos.
+
+            -- Final del frame: volver a banda 0 (superior).
+            if (h_cnt = H_TOTAL - 1) and (v_cnt = V_TOTAL - 1) then
                 map_stride <= unsigned(scs_s2);
+                if (rl0_s2 = x"FF") then
+                    band_idx <= "01";
+                    scroll_x <= unsigned(scx_s2);
+                    scroll_y <= unsigned(scy_s2);
+                else
+                    band_idx <= "00";
+                    scroll_x <= unsigned(b2x_s2);
+                    scroll_y <= unsigned(b2y_s2);
+                end if;
+            -- Banda MEDIA (1): cruzar raster_line0.
+            elsif (h_cnt = H_TOTAL - 1) and (v_cnt < V_VISIBLE) and (band_idx = "00") and
+                  (rl0_s2 /= x"FF") and (vline >= to_integer(unsigned(rl0_s2))) then
+                band_idx <= "01";
+                scroll_x <= unsigned(scx_s2);
+                scroll_y <= unsigned(scy_s2);
+            -- Banda INFERIOR (2): cruzar raster_line1.
+            elsif (h_cnt = H_TOTAL - 1) and (v_cnt < V_VISIBLE) and (band_idx = "01") and
+                  (rl1_s2 /= x"FF") and (vline >= to_integer(unsigned(rl1_s2))) then
+                band_idx <= "10";
+                scroll_x <= unsigned(b3x_s2);
+                scroll_y <= unsigned(b3y_s2);
             end if;
         end if;
     end process;
@@ -450,8 +516,6 @@ begin
     end process;
 
     -- posicion de MUNDO = pantalla + scroll (11 bits, 0..2047)
-    -- NOTA: el scroll se APARCA. scroll_x/scroll_y estan sincronizados pero
-    -- se dejan a 0 desde el software, de modo que x0_world = x0_log.
     x0_world <= resize(x0_log, 11) + scroll_x;
     y0_world <= resize(y0_log, 11) + scroll_y;
 

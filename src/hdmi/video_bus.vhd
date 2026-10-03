@@ -72,7 +72,22 @@ entity video_bus is
         --   $D808 map_stride (ancho del mapa en celdas)
         sc_x_out    : out std_logic_vector(10 downto 0);
         sc_y_out    : out std_logic_vector(10 downto 0);
-        sc_stride   : out std_logic_vector(7 downto 0)
+        sc_stride   : out std_logic_vector(7 downto 0);
+
+        -- Split de raster (Fase 8): $D809-$D812  (hasta 3 bandas)
+        --   $D809 raster_line0 : fin de la banda SUPERIOR.  $FF = sin banda top.
+        --   $D80A/$D80B band2_x/lo,hi : scroll de la banda SUPERIOR
+        --   $D80C/$D80D band2_y/lo,hi : scroll Y de la banda SUPERIOR
+        --   $D80E raster_line1 : fin de la banda MEDIA.  $FF = sin banda bottom.
+        --   $D80F/$D810 band3_x lo/hi : scroll de la banda INFERIOR
+        --   $D811/$D812 band3_y lo/hi : scroll Y de la banda INFERIOR
+        --   La banda MEDIA usa el scroll NORMAL ($D804/$D806).
+        rl0_out     : out std_logic_vector(7 downto 0);
+        b2x_out     : out std_logic_vector(10 downto 0);
+        b2y_out     : out std_logic_vector(10 downto 0);
+        rl1_out     : out std_logic_vector(7 downto 0);
+        b3x_out     : out std_logic_vector(10 downto 0);
+        b3y_out     : out std_logic_vector(10 downto 0)
     );
 end entity;
 
@@ -107,6 +122,18 @@ architecture rtl of video_bus is
     signal sc_y_hi_r   : std_logic_vector(2 downto 0) := (others => '0');
     signal sc_stride_r : std_logic_vector(7 downto 0) := x"28";
 
+    -- Split de raster ($D809-$D812)
+    signal raster_line0_r : std_logic_vector(7 downto 0) := x"FF";  -- banda top
+    signal b2x_lo_r      : std_logic_vector(7 downto 0) := (others => '0');
+    signal b2x_hi_r      : std_logic_vector(2 downto 0) := (others => '0');
+    signal b2y_lo_r      : std_logic_vector(7 downto 0) := (others => '0');
+    signal b2y_hi_r      : std_logic_vector(2 downto 0) := (others => '0');
+    signal raster_line1_r : std_logic_vector(7 downto 0) := x"FF";  -- banda bottom
+    signal b3x_lo_r      : std_logic_vector(7 downto 0) := (others => '0');
+    signal b3x_hi_r      : std_logic_vector(2 downto 0) := (others => '0');
+    signal b3y_lo_r      : std_logic_vector(7 downto 0) := (others => '0');
+    signal b3y_hi_r      : std_logic_vector(2 downto 0) := (others => '0');
+
     -- Latido de limpieza de status (pulso al leer $D803)
     signal clear_tgl  : std_logic := '0';
     signal ct_s1      : std_logic := '0';
@@ -132,6 +159,16 @@ begin
                 sc_y_lo_r   <= (others => '0');
                 sc_y_hi_r   <= (others => '0');
                 sc_stride_r <= x"28";
+                raster_line0_r <= x"FF";
+                b2x_lo_r <= (others => '0');
+                b2x_hi_r <= (others => '0');
+                b2y_lo_r <= (others => '0');
+                b2y_hi_r <= (others => '0');
+                raster_line1_r <= x"FF";
+                b3x_lo_r <= (others => '0');
+                b3x_hi_r <= (others => '0');
+                b3y_lo_r <= (others => '0');
+                b3y_hi_r <= (others => '0');
             elsif cpu_rw = '0' then
                 if cpu_addr = x"D804" then
                     sc_x_lo_r <= cpu_data_in;
@@ -143,6 +180,26 @@ begin
                     sc_y_hi_r <= cpu_data_in(2 downto 0);
                 elsif cpu_addr = x"D808" then
                     sc_stride_r <= cpu_data_in;
+                elsif cpu_addr = x"D809" then
+                    raster_line0_r <= cpu_data_in;
+                elsif cpu_addr = x"D80A" then
+                    b2x_lo_r <= cpu_data_in;
+                elsif cpu_addr = x"D80B" then
+                    b2x_hi_r <= cpu_data_in(2 downto 0);
+                elsif cpu_addr = x"D80C" then
+                    b2y_lo_r <= cpu_data_in;
+                elsif cpu_addr = x"D80D" then
+                    b2y_hi_r <= cpu_data_in(2 downto 0);
+                elsif cpu_addr = x"D80E" then
+                    raster_line1_r <= cpu_data_in;
+                elsif cpu_addr = x"D80F" then
+                    b3x_lo_r <= cpu_data_in;
+                elsif cpu_addr = x"D810" then
+                    b3x_hi_r <= cpu_data_in(2 downto 0);
+                elsif cpu_addr = x"D811" then
+                    b3y_lo_r <= cpu_data_in;
+                elsif cpu_addr = x"D812" then
+                    b3y_hi_r <= cpu_data_in(2 downto 0);
                 end if;
             end if;
         end if;
@@ -152,6 +209,14 @@ begin
     sc_x_out  <= sc_x_hi_r & sc_x_lo_r;
     sc_y_out  <= sc_y_hi_r & sc_y_lo_r;
     sc_stride <= sc_stride_r;
+
+    -- Split de raster
+    rl0_out <= raster_line0_r;
+    b2x_out <= b2x_hi_r & b2x_lo_r;
+    b2y_out <= b2y_hi_r & b2y_lo_r;
+    rl1_out <= raster_line1_r;
+    b3x_out <= b3x_hi_r & b3x_lo_r;
+    b3y_out <= b3y_hi_r & b3y_lo_r;
 
     -- ========================================================================
     -- Captura de la escritura del CPU en clk_sys
