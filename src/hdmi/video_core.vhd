@@ -275,12 +275,14 @@ architecture rtl of video_core is
 
     -- ========================================================================
     -- OAM EN REGISTROS (Fase 5 ampliada) -- no consume BSRAM
-    --   32 sprites de 8x8. Cada sprite ocupa 4 bytes:
-    --     +0 X (0..255), +1 Y (0..255), +2 TILE, +3 FLAGS
-    --   FLAGS: bit7 FLIP_Y, bit6 FLIP_X, bit5 PRIO, bits3:0 PALETA.
-    --   128 registros de 8 bits.
+    --   32 sprites de 8x8. Cada sprite ocupa 5 bytes:
+    --     +0 X (0..255), +1 Y (0..255), +2 TILE, +3 FLAGS, +4 COLL_POINT
+    --   FLAGS: bit7 FLIP_Y, bit6 FLIP_X, bit5 PRIO, bit4 SCALE2X, bits3:0 PALETA.
+    --   COLL_POINT: punto de colision sprite<->tile. byte = dy(7:4) & dx(3:0)?
+    --               Se usa offset libre: bits 2:0 = dx (0..7), bits 5:3 = dy (0..7).
+    --   160 registros de 8 bits.
     -- ========================================================================
-    type oam_t is array (0 to 127) of std_logic_vector(7 downto 0);
+    type oam_t is array (0 to 159) of std_logic_vector(7 downto 0);
     signal oam_reg : oam_t := (others => (others => '0'));
 
     -- ========================================================================
@@ -928,8 +930,8 @@ begin
                     else
                         -- area "11"
                         if vid_spr = '0' then
-                            -- OAM (registros, 32 sprites x 4 bytes = 128)
-                            oam_reg(to_integer(unsigned(vid_addr(6 downto 0)))) <= vid_data;
+                            -- OAM (registros, 32 sprites x 5 bytes = 160)
+                            oam_reg(to_integer(unsigned(vid_addr(7 downto 0)))) <= vid_data;
                         else
                             -- patrones de SPRITE
                             if vid_hi = '0' then
@@ -1001,9 +1003,13 @@ begin
                         -- fin del barrido
                         coll_phase <= 0;
                     else
-                        -- centro del sprite (8x8): +4 en cada eje
-                        csx := unsigned(oam_reg(to_integer(coll_idx) * 4 + 0)) + 4;
-                        csy := unsigned(oam_reg(to_integer(coll_idx) * 4 + 1)) + 4;
+                        -- punto de colision configurable por sprite (COLL_POINT, +4)
+                        --   bits 2:0 = dx (0..7), bits 5:3 = dy (0..7)
+                        --   punto = (sx + dx, sy + dy)
+                        csx := unsigned(oam_reg(to_integer(coll_idx) * 5 + 0)) +
+                               resize(unsigned(oam_reg(to_integer(coll_idx) * 5 + 4)(2 downto 0)), 8);
+                        csy := unsigned(oam_reg(to_integer(coll_idx) * 5 + 1)) +
+                               resize(unsigned(oam_reg(to_integer(coll_idx) * 5 + 4)(5 downto 3)), 8);
                         xce := resize(csx srl 3, 6);  -- celda X /8 (6 bits, 0..63)
                         yce := resize(csy srl 3, 5);  -- celda Y /8 (5 bits, 0..31)
                         -- celda = y_celda * 64 + x_celda
@@ -1097,12 +1103,12 @@ begin
                         lb_scale(k) <= '0';
                     end loop;
                 elsif oam_scan < 32 then
-                    -- evaluar el sprite 'oam_scan'
-                    sy     := unsigned(oam_reg(to_integer(oam_scan) * 4 + 1));
-                    sx     := unsigned(oam_reg(to_integer(oam_scan) * 4 + 0));
-                    stile  := oam_reg(to_integer(oam_scan) * 4 + 2)(5 downto 0);
-                    spal   := oam_reg(to_integer(oam_scan) * 4 + 3)(3 downto 0);
-                    sscale := oam_reg(to_integer(oam_scan) * 4 + 3)(4);  -- SCALE2X
+                    -- evaluar el sprite 'oam_scan' (5 bytes por sprite)
+                    sy     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 1));
+                    sx     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 0));
+                    stile  := oam_reg(to_integer(oam_scan) * 5 + 2)(5 downto 0);
+                    spal   := oam_reg(to_integer(oam_scan) * 5 + 3)(3 downto 0);
+                    sscale := oam_reg(to_integer(oam_scan) * 5 + 3)(4);  -- SCALE2X
 
                     -- alcance vertical: 8 lineas (1x) o 16 lineas (2x)
                     if sscale = '1' then
@@ -1117,9 +1123,9 @@ begin
                         lb_x(to_integer(lb_n)) <= sx;
                         -- attr: tile(6) + prio + flipx + flipy
                         lb_attr(to_integer(lb_n)) <= stile &
-                                                     oam_reg(to_integer(oam_scan) * 4 + 3)(5) &
-                                                     oam_reg(to_integer(oam_scan) * 4 + 3)(6) &
-                                                     oam_reg(to_integer(oam_scan) * 4 + 3)(7) &
+                                                     oam_reg(to_integer(oam_scan) * 5 + 3)(5) &
+                                                     oam_reg(to_integer(oam_scan) * 5 + 3)(6) &
+                                                     oam_reg(to_integer(oam_scan) * 5 + 3)(7) &
                                                      "000";
                         lb_pal(to_integer(lb_n)) <= spal;
                         lb_scale(to_integer(lb_n)) <= sscale;
@@ -1127,14 +1133,14 @@ begin
                         --   1x: row = line_y - sy            (0..7)
                         --   2x: row = (line_y - sy) / 2      (0..7)
                         if sscale = '1' then
-                            if oam_reg(to_integer(oam_scan) * 4 + 3)(7) = '1' then
+                            if oam_reg(to_integer(oam_scan) * 5 + 3)(7) = '1' then
                                 lb_row(to_integer(lb_n)) <= 7 - resize((line_y - sy)/2, 3);
                             else
                                 lb_row(to_integer(lb_n)) <= resize((line_y - sy)/2, 3);
                             end if;
                         else
                             -- fila: si FLIP_Y, invertir (7 - row)
-                            if oam_reg(to_integer(oam_scan) * 4 + 3)(7) = '1' then
+                            if oam_reg(to_integer(oam_scan) * 5 + 3)(7) = '1' then
                                 lb_row(to_integer(lb_n)) <= 7 - resize(line_y - sy, 3);
                             else
                                 lb_row(to_integer(lb_n)) <= resize(line_y - sy, 3);

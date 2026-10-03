@@ -542,7 +542,41 @@ izquierda; un objeto 16×16 a 2× se compone con 4 sprites y paso +16.
 
 **Pendiente (opción):** punto de colisión **configurable por sprite** (pie/cabeza/
 centro) — requeriría ampliar el OAM a 5 bytes por sprite. Por ahora, **punto fijo
-= centro**.
+**Pendiente (opción):** ~~punto de colisión configurable por sprite~~ → **implementado en Fase 11**.
+
+---
+
+### Fase 11 — Punto de colisión configurable (OAM 5 bytes) ✅ COMPLETADA
+
+**Objetivo:** que el punto de colisión sprite↔tile sea **configurable por sprite** y
+**cambiable en tiempo real** (p. ej. borde derecho al ir a la derecha, izquierdo al
+ir a la izquierda).
+
+**Diseño:**
+- **OAM ampliado de 4 a 5 bytes por sprite** (32 × 5 = **160 bytes**).
+  - +0 X, +1 Y, +2 TILE, +3 FLAGS, **+4 COLL_POINT**.
+- **COLL_POINT**: `bits 2:0 = dx`, `bits 5:3 = dy` (**offset libre 0-7**).
+  Punto de colisión = `(X + dx, Y + dy)`, cualquier píxel del sprite 8×8.
+- El barrido de colisión usa ese offset en vez del centro fijo.
+- El CPU escribe COLL_POINT como cualquier byte de OAM (índice `sprite*5 + 4`).
+
+**Ejemplos de offset:**
+
+| Punto | dx,dy | Byte |
+|-------|-------|------|
+| centro | 4,4 | `$24` |
+| pie | 4,7 | `$3C` |
+| cabeza | 4,0 | `$04` |
+| borde izq | 0,4 | `$20` |
+| borde der | 7,4 | `$27` |
+
+**Coste real:** 5.163 → 5.986 LUTs (**+823 LUTs**). **BSRAM: 0.**
+
+> **Nota de latencia:** la colisión se recalcula una vez por frame (blanking), así
+> que reaccionar al flag tiene **1 frame de latencia** → el sprite puede “pasarse”
+> ~1 px al chocar. **En el hardware no se compensa**; el juego lo resuelve con un
+> **push-out** de 1 px al rebotar (estándar en juegos). El hardware solo responde
+> “el punto tocó sólido” (sí/no).
 
 ---
 

@@ -126,7 +126,7 @@ distintas** cambiando solo el byte de atributo de cada celda.
 
 ## 3. Byte de flags de sprite (OAM) — IMPLEMENTADO
 
-OAM de **32 entradas** × 4 bytes, en **registros** (no BSRAM):
+OAM de **32 entradas** × **5 bytes**, en **registros** (no BSRAM):
 
 | Offset | Campo | Descripción |
 |--------|-------|-------------|
@@ -134,19 +134,25 @@ OAM de **32 entradas** × 4 bytes, en **registros** (no BSRAM):
 | +1 | `Y` | Coordenada Y (0–255); **Y >= 248 = sprite deshabilitado** |
 | +2 | `TILE` | Índice de patrón de sprite (0–63) |
 | +3 | `FLAGS` | Ver abajo |
+| +4 | `COLL_POINT` | Punto de colisión sprite↔tile (dx, dy) — ver §3.3 |
+
+Dirección de un campo en el OAM (escritura indirecta): **`sprite * 5 + offset`**
+(sprite 0..31, offset 0..4 ⇒ byte 0..159).
 
 ```
+   FLAGS
    bit 7     bit 6     bit 5   bit 4   bit 3   bit 2   bit 1   bit 0
  ┌─────────┬─────────┬───────┬───────┬───────┬───────┬───────┬───────┐
- │ FLIP_Y  │ FLIP_X  │  PRIO │   -   │        PALETA (4 bits)          │
+ │ FLIP_Y  │ FLIP_X  │  PRIO │SCALE2X│        PALETA (4 bits)          │
  └─────────┴─────────┴───────┴───────┴───────┴───────┴───────┴───────┘
 ```
 
 | Campo | Bits | Estado | Efecto |
 |-------|------|--------|--------|
-| `FLIP_Y` | 7 | ⏳ reservado | Volteo vertical |
-| `FLIP_X` | 6 | ⏳ reservado | Volteo horizontal |
-| `PRIO` | 5 | ✅ | **1** = sprite DETRÁS del fondo |
+| `FLIP_Y` | 7 | ✅ | Volteo vertical |
+| `FLIP_X` | 6 | ✅ | Volteo horizontal |
+| `PRIO` | 5 | ✅ | **1** = sprite DETRÁS del fondo; 0 = delante |
+| `SCALE2X` | 4 | ✅ | **1** = sprite al doble (16×16 en pantalla) |
 | `PALETA` | 3:0 | ✅ (usa 1:0) | Paleta de sprite (4 disponibles) |
 
 ### 3.1 Convenciones de sprite (implementadas)
@@ -156,6 +162,7 @@ OAM de **32 entradas** × 4 bytes, en **registros** (no BSRAM):
 | Color 0 | **Transparente** |
 | Tamaño base | **8×8** (un patrón) |
 | Objeto grande | 16×16 = **4 sprites de 8×8** en rejilla 2×2 |
+| Objeto a 2× | 16×16 = 4 sprites con `SCALE2X`, separados **+16** px |
 | Patrones | 64 disponibles (banco `spr_arr`, 128×16 = 1 bloque BSRAM) |
 | Sprites en pantalla | 32 en OAM; **8 por línea** (line buffer) |
 | Prioridad | Menor índice de OAM gana entre sprites con el mismo PRIO |
@@ -166,13 +173,53 @@ OAM de **32 entradas** × 4 bytes, en **registros** (no BSRAM):
 |-----|-------|-------------|
 | 7 | `VBLANK` | 1 = en vblank (seguro escribir VRAM) |
 | 6 | `SPRITE_OVERFLOW` | 1 = más de 8 sprites en una línea |
-| 5 | — | reservado (HIT descartado por coste) |
+| **5** | **`SOLID_HIT`** | 1 = algún sprite tocó un tile sólido (colisión, Fase 10/11) |
 | **4** | **`VIDEO_READY`** | **1 = inicialización de la VRAM terminada** |
 | 3:0 | — | reservado |
 
 > **IMPORTANTE:** el CPU debe esperar `VIDEO_READY=1` antes de escribir la VRAM.
 > Durante la init, el puerto A lo controla el hardware y las escrituras del CPU
 > se **descartan**. Ver `04-MODO-TEXTO.md` §4.
+
+### 3.3 COLL_POINT — punto de colisión configurable (Fase 11)
+
+El byte **+4** del sprite define **qué píxel del sprite** se usa para la colisión
+sprite↔tile. Codificación (**offset libre 0-7 en cada eje**):
+
+```
+   bit 7   bit 6   bit 5   bit 4   bit 3   bit 2   bit 1   bit 0
+ ┌───────┬───────┬───────┬───────────────────────┬───────────────┐
+ │   -   │   -   │     dy (0..7)             │    dx (0..7)   │
+ └───────┴───────┴───────────────────────┴───────────────┘
+```
+
+El punto de colisión (en píxeles de pantalla) es **`(X + dx, Y + dy)`**.
+
+| Punto deseado | dx, dy | Byte `COLL_POINT` |
+|---------------|--------|-------------------|
+| centro | 4,4 | `$24` |
+| pie (abajo-centro) | 4,7 | `$3C` |
+| cabeza (arriba-centro) | 4,0 | `$04` |
+| borde izquierdo | 0,4 | `$20` |
+| borde derecho | 7,4 | `$27` |
+| esquina sup-izq | 0,0 | `$00` |
+| esquina inf-der | 7,7 | `$3F` |
+
+**Cómo funciona la detección:** una vez por frame (blanking vertical), el hardware
+recorre los 32 sprites, evalúa `(X+dx, Y+dy)`, mira la celda de 8×8 correspondiente y
+lee el bit 4 (`SOLIDO`) de su atributo. Si está a 1, activa `SOLID_HIT`.
+
+**Uso típico (juego):**
+
+```asm
+; Cada frame, tras decidir la direccion, ajustar el punto al borde que avanza:
+;   si va a la derecha -> borde derecho (dx=7)
+;   si va a la izquierda -> borde izquierdo (dx=0)
+; y al detectar SOLID_HIT, invertir direccion (+ push-out de 1 px si se desea).
+```
+
+> **Latencia:** 1 frame (la colisión se recalcula en el blanking). El sprite puede
+> "pasarse" ~1 px al chocar; se compensa en el juego con un push-out de 1 px.
 
 ---
 

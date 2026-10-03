@@ -41,34 +41,43 @@ wait_ready:
     BEQ wait_ready
 
     ; ============================================
-    ; 1) Columna 20 (filas 2..23): pintarla y marcarla SOLIDA.
-    ;    - tilemap  = tile 3 (solido de la init) para VERLA
-    ;    - atributo = bit 4 (SOLIDO)
-    ;    Celda = fila*64 + 20.
+    ; 0) Cargar el tile 64 = bloque solido azul oscuro (color 1, paleta 0).
+    ;    direccion del patron = tile*8 + fila = 512 + Y
+    ;      dir(7:0) = Y ; dir(10:8) = 010 (=2, por el bit 9)
+    ;    VID_HI: area "10" ($80) | dir_hi ; +bit5 = pat_hi
+    ;    plano0 = $FF (color 1), plano1 = $00
     ; ============================================
-    LDA #2
-    STA $14            ; fila inicial
-mark_rows:
-    JSR cell_addr      ; CUR = fila*64 + 20  ($17=lo, $18=hi)
-    ; --- tilemap (area 00) = tile 3 ---
-    LDA $17
-    STA VID_LO
-    LDA $18
-    STA VID_HI         ; area 00
-    LDA #$03
-    STA VID_DT
-    ; --- atributo (area 01) = bit 4 SOLIDO ---
-    LDA $17
-    STA VID_LO
-    LDA $18
-    ORA #$40           ; area 01 = atributos
+    LDY #0
+ld_tile:
+    ; plano 0
+    LDA #$82            ; area 10, pat_hi=0, dir_hi=2
     STA VID_HI
-    LDA #$10           ; bit 4 = SOLIDO (paleta 0)
+    TYA
+    STA VID_LO
+    LDA #$FF
     STA VID_DT
-    INC $14
-    LDA $14
-    CMP #24
-    BNE mark_rows
+    ; plano 1
+    LDA #$A2            ; area 10, pat_hi=1, dir_hi=2
+    STA VID_HI
+    TYA
+    STA VID_LO
+    LDA #$00
+    STA VID_DT
+    INY
+    CPY #8
+    BNE ld_tile
+
+    ; ============================================
+    ; 1) Dos columnas SOLIDAS: 14 y 26 (filas 2..23), tile 64.
+    ;    - tilemap  = tile 64 (bloque azul oscuro)
+    ;    - atributo = bit 4 (SOLIDO)
+    ; ============================================
+    LDA #14
+    STA $1C            ; columna 1
+    JSR mark_column
+    LDA #26
+    STA $1C            ; columna 2
+    JSR mark_column
 
     ; ============================================
     ; 2) Cargar patron del muneco (sprite 8x8, patron 0)
@@ -92,12 +101,13 @@ ld_spr:
     BNE ld_spr
 
     ; ============================================
-    ; 3) Sprite 0: muneco en (40, 120), paleta 0
+    ; 3) Sprite 0: cuadrado en (140, 120), entre las dos columnas
     ; ============================================
-    LDA #40
+    LDA #140
     STA XLO
     LDA #0
-    STA DIR
+    STA DIR            ; 0 = derecha
+    STA PALF           ; paleta del sprite = 0 (fija)
 
     ; X
     LDA #$C0
@@ -127,6 +137,14 @@ ld_spr:
     STA VID_LO
     LDA #$00
     STA VID_DT
+    ; COLL_POINT: empezando hacia la derecha -> borde derecho (dx=7,dy=4) = $24
+    ;   (dx en bits 2:0, dy en bits 5:3). dy=4 = %100 -> bits 5:3 = 100 = $20; dx=7 = $07
+    LDA #$C0
+    STA VID_HI
+    LDA #4
+    STA VID_LO
+    LDA #$27            ; dy=4 (bits 5:3=100 -> $20) | dx=7 -> $27
+    STA VID_DT
 
     ; ============================================
     ; 4) Bucle principal
@@ -139,38 +157,27 @@ wvb:
     BEQ wvb
 
     ; =================== ESTAMOS EN VBLANK ===================
-    ; mover el sprite
+    ; Leer SOLID_HIT del frame anterior: si toco un tile solido,
+    ; invertir la direccion (rebote) y NO mover este frame.
+    LDA VID_ST
+    AND #$20            ; bit 5 = SOLID_HIT
+    BEQ sh_no
+    ; --- hubo colision: invertir direccion, no mover este frame ---
+    LDA DIR
+    EOR #$01
+    STA DIR
+    JMP up_x            ; saltar el movimiento (evita pasarse 1 px)
+sh_no:
+
+move:
+    ; mover segun direccion
     LDA DIR
     BNE mov_l
     INC XLO
-    LDA XLO
-    CMP #200
-    BCC up_x
-    LDA #1
-    STA DIR
     JMP up_x
 mov_l:
     DEC XLO
-    LDA XLO
-    CMP #20
-    BCS up_x
-    LDA #0
-    STA DIR
 up_x:
-
-    ; === COLISION REAL: leer el flag SOLID_HIT (bit 5 de $D803) ===
-    ; Si el centro del sprite toco un tile solido en el ultimo barrido, paleta 1.
-    LDA VID_ST
-    AND #$20            ; bit 5 = SOLID_HIT
-    BEQ pal0
-    LDA #$01
-    STA PALF
-    JMP write_spr
-pal0:
-    LDA #$00
-    STA PALF
-
-write_spr:
     ; escribir X del sprite 0
     LDA #$C0
     STA VID_HI
@@ -186,6 +193,24 @@ write_spr:
     LDA PALF
     STA VID_DT
 
+    ; escribir COLL_POINT segun la direccion:
+    ;   derecha (DIR=0) -> borde derecho dx=7 -> $27 (dy=4)
+    ;   izquierda (DIR=1) -> borde izquierdo dx=0 -> $20 (dy=4)
+    LDA DIR
+    BNE cp_left
+    LDA #$27
+    JMP cp_write
+cp_left:
+    LDA #$20
+cp_write:
+    STA $1B             ; valor de COLL_POINT
+    LDA #$C0
+    STA VID_HI
+    LDA #4
+    STA VID_LO
+    LDA $1B
+    STA VID_DT
+
     ; esperar salir del VBLANK (bit 7 = 0)
 wvb2:
     LDA VID_ST
@@ -194,9 +219,38 @@ wvb2:
     JMP main_loop
 
 ; ============================================
-; cell_addr: CUR = fila($14)*64 + columna 20
+; mark_column: marca como sólida (y pinta tile 3) las filas 2..23
+;   de la columna en $1C.
+; ============================================
+mark_column:
+    LDA #2
+    STA $14            ; fila
+mc_row:
+    JSR cell_addr      ; CUR = fila*64 + $1C  ($17=lo, $18=hi)
+    ; tilemap = tile 64
+    LDA $17
+    STA VID_LO
+    LDA $18
+    STA VID_HI
+    LDA #64
+    STA VID_DT
+    ; atributo = bit 4 SOLIDO
+    LDA $17
+    STA VID_LO
+    LDA $18
+    ORA #$40
+    STA VID_HI
+    LDA #$10
+    STA VID_DT
+    INC $14
+    LDA $14
+    CMP #24
+    BNE mc_row
+    RTS
+
+; ============================================
+; cell_addr: CUR = fila($14)*64 + columna($1C)
 ;   CUR_LO = $17, CUR_HI = $18
-;   columna 20 = $14; los 6 bits bajos guardan la col (0..63)
 ; ============================================
 cell_addr:
     LDA $14
@@ -211,8 +265,14 @@ cell_addr:
     ASL A
     ASL A
     ASL A
-    ORA #$14           ; columna 20
-    STA $17            ; CUR_LO = (fila&3)<<6 + 20
+    STA $17            ; (fila&3)<<6
+    LDA $17
+    CLC
+    ADC $1C            ; + columna (0..63)
+    STA $17
+    BCC ca_done
+    INC $18
+ca_done:
     RTS
 
 ; patron del sprite: CUADRADO solido (todo color 1) para ver fallos

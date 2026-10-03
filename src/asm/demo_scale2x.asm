@@ -73,7 +73,7 @@ wait_ready:
     STA Xpos
     LDA #1
     STA TILE2
-    LDA #4
+    LDA #5
     STA BIDX
     JSR oam_write
 
@@ -83,7 +83,7 @@ wait_ready:
     STA YPOS
     LDA #2
     STA TILE2
-    LDA #8
+    LDA #10
     STA BIDX
     JSR oam_write
 
@@ -91,7 +91,7 @@ wait_ready:
     STA Xpos
     LDA #3
     STA TILE2
-    LDA #12
+    LDA #15
     STA BIDX
     JSR oam_write
 
@@ -114,7 +114,7 @@ init2x:
     STA YPOS
     LDA #0
     STA TILE2
-    LDA #16
+    LDA #20
     STA BIDX
     LDA #$10
     STA FLAGS
@@ -126,7 +126,7 @@ init2x:
     STA Xpos
     LDA #1
     STA TILE2
-    LDA #20
+    LDA #25
     STA BIDX
     JSR oam_write
 
@@ -136,7 +136,7 @@ init2x:
     STA YPOS
     LDA #2
     STA TILE2
-    LDA #24
+    LDA #30
     STA BIDX
     JSR oam_write
 
@@ -146,7 +146,7 @@ init2x:
     STA Xpos
     LDA #3
     STA TILE2
-    LDA #28
+    LDA #35
     STA BIDX
     JSR oam_write
 
