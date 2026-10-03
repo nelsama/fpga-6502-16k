@@ -85,23 +85,15 @@ IO_PORT "spi_cs_n[2]" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
 IO_LOC "spi_cs_n[3]" 27;
 IO_PORT "spi_cs_n[3]" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
 
-// HDMI TMDS (BANK1 - 3.3V) - Reservado
-IO_LOC "hdmi_tmds_ck_p_out" 69;
-IO_PORT "hdmi_tmds_ck_p_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "hdmi_tmds_ck_n_out" 68;
-IO_PORT "hdmi_tmds_ck_n_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-
-IO_LOC "hdmi_tmds_c0_p_out" 71;
-IO_PORT "hdmi_tmds_c0_p_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "hdmi_tmds_c0_n_out" 70;
-IO_PORT "hdmi_tmds_c0_n_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-
-IO_LOC "hdmi_tmds_c1_p_out" 73;
-IO_PORT "hdmi_tmds_c1_p_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "hdmi_tmds_c1_n_out" 72;
-IO_PORT "hdmi_tmds_c1_n_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-
-IO_LOC "hdmi_tmds_c2_p_out" 75;
-IO_PORT "hdmi_tmds_c2_p_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
-IO_LOC "hdmi_tmds_c2_n_out" 74;
-IO_PORT "hdmi_tmds_c2_n_out" IO_TYPE=LVCMOS33 PULL_MODE=NONE DRIVE=8;
+// HDMI TMDS (BANK1 - 3.3V)
+// Pares diferenciales: IO_LOC con (P,N) en una linea. NO se declara
+// IO_TYPE porque el tipo lo infiere la primitiva ELVDS_OBUF del modulo HDMI.
+// Formato identico al proyecto Atari-2600, probado en Tang Nano 9K.
+IO_LOC "hdmi_tmds_ck_p_out" 69,68;
+IO_PORT "hdmi_tmds_ck_p_out" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "hdmi_tmds_c2_p_out" 75,74;
+IO_PORT "hdmi_tmds_c2_p_out" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "hdmi_tmds_c1_p_out" 73,72;
+IO_PORT "hdmi_tmds_c1_p_out" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;
+IO_LOC "hdmi_tmds_c0_p_out" 71,70;
+IO_PORT "hdmi_tmds_c0_p_out" PULL_MODE=NONE DRIVE=8 BANK_VCCIO=3.3;

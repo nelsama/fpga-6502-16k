@@ -1,14 +1,14 @@
--d D:\Proyectos\gowin_workspace\6502_board_v3\impl\gwsynthesis\6502_board_v3.vg
+-d D:\Proyectos\fpga-6502-16k\impl\gwsynthesis\6502_board_v3.vg
 -p GW1NR-9C-QFN88P-6
 -pn GW1NR-LV9QN88PC6/I5
--cst D:\Proyectos\gowin_workspace\6502_board_v3\src\6502_board.cst
--cfg D:\Proyectos\gowin_workspace\6502_board_v3\impl\pnr\device.cfg
+-cst D:\Proyectos\fpga-6502-16k\src\6502_board.cst
+-cfg D:\Proyectos\fpga-6502-16k\impl\pnr\device.cfg
+-sdc D:\Proyectos\fpga-6502-16k\src\6502_board_v2_1.sdc
 -bit
 -tr
 -ph
 -timing
 -cst_error
--convert_sdp32_36_to_sdp16_18
 -place_option 0
 -route_option 0
 -clock_route_order 0

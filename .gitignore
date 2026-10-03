@@ -42,3 +42,11 @@ Thumbs.db
 
 # Log files
 *.log
+
+# Ensamblador 6502 (generados)
+src/asm/*.o
+src/asm/*.lst
+src/asm/*.bin
+!src/asm/c64_charrom.bin
+src/asm/__pycache__/
+__pycache__/

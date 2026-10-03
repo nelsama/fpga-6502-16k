@@ -52,7 +52,49 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 | `$C030 - $C03F` | 16 bytes | **Timer de precisión** |
 | `$C040 - $C047` | 8 bytes | **SPI Master** (SD Card) |
 | `$D400 - $D41F` | 32 bytes | **SID 6581** (compatible C64) |
+| `$D800 - $D803` | 4 bytes | **Video** (VRAM indirecta + STATUS) |
 | `$FFFA - $FFFF` | 6 bytes | **Vectores** (mapeados a ROM $BFFA-$BFFF) |
+
+### Registros de Video
+
+El CPU controla el motor de video a traves de cuatro registros:
+
+| Dirección | Registro | R/W | Descripción |
+|-----------|----------|-----|-------------|
+| `$D800` | `VID_ADDR_LO` | W | Byte bajo de la direccion |
+| `$D801` | `VID_ADDR_HI` | W | Area (7:6) + pat_hi (5) + dir alta (2:0) |
+| `$D802` | `VID_DATA` | W | Dato; al escribir **dispara** la escritura |
+| `$D803` | `STATUS` | R | VBLANK (bit 7) + SPRITE_OVERFLOW (bit 6) |
+
+**Areas** (`$D801` bits 7:6): `00`=tilemap, `01`=atributos, `10`=patrones fondo,
+`11`=sprite/OAM (bit 3: `0`=OAM, `1`=patron de sprite).
+**pat_hi** (bit 5): `0`=plano 0, `1`=plano 1 (palabra de 16 bits).
+**Los patrones de sprite** usan `$C8` (plano 0) y `$E8` (plano 1).
+
+Ejemplo (dibujar tile 2 en la celda (x=10, y=5) del tilemap):
+
+```asm
+    ; dir = y*40 + x = 5*40 + 10 = 210 = $00D2
+    LDA #$D2
+    STA $D800        ; dir[7:0]
+    LDA #$00         ; area=00 (tilemap), dir[10:8]=0
+    STA $D801
+    LDA #$02         ; indice de tile
+    STA $D802        ; dispara la escritura
+```
+
+Ejemplo (mover el sprite 0 a X=100, Y=80, tile 0, paleta 0):
+
+```asm
+    LDA #$00 : STA $D800 : LDA #$C0 : STA $D801 : LDA #100 : STA $D802  ; X
+    LDA #$01 : STA $D800 : LDA #$C0 : STA $D801 : LDA #80  : STA $D802  ; Y
+    LDA #$02 : STA $D800 : LDA #$C0 : STA $D801 : LDA #0   : STA $D802  ; TILE
+    LDA #$03 : STA $D800 : LDA #$C0 : STA $D801 : LDA #0   : STA $D802  ; FLAGS
+```
+
+**OAM**: 32 sprites x 4 bytes. Byte = `sprite*4 + campo` (0=X, 1=Y, 2=TILE, 3=FLAGS).
+**FLAGS del sprite**: bit 7 FLIP_Y, bit 6 FLIP_X, bit 5 PRIO (1=detras del fondo),
+bits 3:0 paleta. **Y >= 248 deshabilita el sprite.**
 
 ### Registros I2C
 

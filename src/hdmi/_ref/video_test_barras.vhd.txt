@@ -1,0 +1,226 @@
+-- ============================================================================
+-- video_test.vhd  --  Generador de barras de color y timing para HDMI
+--
+-- Enfoque: replica exacta del proyecto Atari-2600 (probado en Tang Nano 9K).
+--   - vga_clk    = CLOCK_27_i  (27 MHz, pixel clock directo, sin PLL)
+--   - vga_clk_x5 = PLL x5      (135 MHz, reloj serie)
+--   - Salida por OSER10 + ELVDS_OBUF (primitivas nativas de Gowin)
+--
+-- TIMING: 720x480 @ 60 Hz  (el mismo modo que usa el Atari-2600)
+--
+--   Modeline: 27.000 MHz, HTotal 858, VTotal 525
+--   27,000,000 / (858 x 525) = 60.0 Hz  <- refresh exacto
+--
+--   El cristal de 27 MHz de la Tang Nano 9K coincide EXACTAMENTE con la
+--   frecuencia que este modo necesita, por eso no hace falta PLL para el
+--   pixel clock. Se usa el reloj serie a 135 MHz (x5) para el OSER10.
+--
+-- NOTA: esta es la Fase 1 de prueba (barras de color). El motor de tiles
+--       se anadira mas adelante sobre esta misma base.
+-- ============================================================================
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity video_test is
+    port (
+        clk_27      : in  std_logic;   -- Cristal de 27 MHz
+        rst_n       : in  std_logic;   -- Reset activo bajo
+
+        -- Salidas TMDS
+        tmds_c0_p   : out std_logic;
+        tmds_c0_n   : out std_logic;
+        tmds_c1_p   : out std_logic;
+        tmds_c1_n   : out std_logic;
+        tmds_c2_p   : out std_logic;
+        tmds_c2_n   : out std_logic;
+        tmds_ck_p   : out std_logic;
+        tmds_ck_n   : out std_logic
+    );
+end entity;
+
+architecture rtl of video_test is
+
+    -- ========================================================================
+    -- Relojes
+    -- ========================================================================
+    signal clk_pixel    : std_logic;   -- 27 MHz
+    signal clk_serial   : std_logic;   -- 135 MHz (x5)
+
+    -- ========================================================================
+    -- Timing 720x480 @ 60 Hz  (858 x 525) - identico al Atari-2600
+    --   H: visible 720, sync 736..797 (62 ciclos), total 858
+    --   V: visible 480, sync 489..494 (6 lineas),  total 525
+    -- ========================================================================
+    constant H_VISIBLE  : integer := 720;
+    constant H_SYNC_ON  : integer := 736;   -- 720 + 16
+    constant H_SYNC_OFF : integer := 798;   -- 720 + 16 + 62
+    constant H_TOTAL    : integer := 858;
+
+    constant V_VISIBLE  : integer := 480;
+    constant V_SYNC_ON  : integer := 489;
+    constant V_SYNC_OFF : integer := 495;
+    constant V_TOTAL    : integer := 525;
+
+    signal h_cnt        : unsigned(9 downto 0) := (others => '0');
+    signal v_cnt        : unsigned(9 downto 0) := (others => '0');
+
+    signal hs           : std_logic := '0';
+    signal vs           : std_logic := '0';
+    signal de           : std_logic := '0';
+
+    -- ========================================================================
+    -- Color de prueba
+    -- ========================================================================
+    signal bar_idx      : unsigned(2 downto 0) := (others => '0');
+    signal rgb_r        : std_logic_vector(7 downto 0) := (others => '0');
+    signal rgb_g        : std_logic_vector(7 downto 0) := (others => '0');
+    signal rgb_b        : std_logic_vector(7 downto 0) := (others => '0');
+
+    -- ========================================================================
+    -- Componente del modulo HDMI (Atari-2600, probado en Tang Nano 9K)
+    -- ========================================================================
+    component hdmi_module
+        port (
+            vga_clk_x5      : in  std_logic;
+            vga_clk         : in  std_logic;
+            vga_red_in      : in  std_logic_vector(7 downto 0);
+            vga_green_in    : in  std_logic_vector(7 downto 0);
+            vga_blue_in     : in  std_logic_vector(7 downto 0);
+            vga_hsync_in    : in  std_logic;
+            vga_vsync_in    : in  std_logic;
+            vga_disp_ena_in : in  std_logic;
+            tmds_c0_p_out   : out std_logic;
+            tmds_c0_n_out   : out std_logic;
+            tmds_c1_p_out   : out std_logic;
+            tmds_c1_n_out   : out std_logic;
+            tmds_c2_p_out   : out std_logic;
+            tmds_c2_n_out   : out std_logic;
+            tmds_ck_p_out   : out std_logic;
+            tmds_ck_n_out   : out std_logic
+        );
+    end component;
+
+    component clk_27x5
+        port (
+            clkout  : out std_logic;
+            clkoutp : out std_logic;
+            clkin   : in  std_logic
+        );
+    end component;
+
+begin
+
+    -- ========================================================================
+    -- Pixel clock = cristal directo; reloj serie = PLL x5 (135 MHz)
+    -- ========================================================================
+    clk_pixel <= clk_27;
+
+    pll_x5 : clk_27x5
+        port map (
+            clkout  => clk_serial,
+            clkoutp => open,
+            clkin   => clk_27
+        );
+
+    -- ========================================================================
+    -- Contadores de timing
+    -- ========================================================================
+    process (clk_pixel)
+    begin
+        if rising_edge(clk_pixel) then
+            if rst_n = '0' then
+                h_cnt <= (others => '0');
+                v_cnt <= (others => '0');
+            else
+                if h_cnt = H_TOTAL - 1 then
+                    h_cnt <= (others => '0');
+                    if v_cnt = V_TOTAL - 1 then
+                        v_cnt <= (others => '0');
+                    else
+                        v_cnt <= v_cnt + 1;
+                    end if;
+                else
+                    h_cnt <= h_cnt + 1;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    -- ========================================================================
+    -- Sincronias: activas a nivel BAJO (como el Atari)
+    --   hs = '0' durante el pulso de sync (736..797)
+    --   vs = '0' durante el pulso de sync (489..494)
+    -- ========================================================================
+    hs <= '0' when (h_cnt >= H_SYNC_ON) and (h_cnt <= H_SYNC_OFF) else '1';
+
+    vs <= '0' when (v_cnt >= V_SYNC_ON) and (v_cnt <= V_SYNC_OFF) else '1';
+
+    de <= '1' when (h_cnt < H_VISIBLE) and (v_cnt < V_VISIBLE) else '0';
+
+    -- ========================================================================
+    -- Barras de color: 8 franjas verticales de 90 px
+    -- ========================================================================
+    process (clk_pixel)
+    begin
+        if rising_edge(clk_pixel) then
+            if h_cnt < (H_VISIBLE / 8) then
+                bar_idx <= "000";
+            elsif h_cnt < (2 * H_VISIBLE / 8) then
+                bar_idx <= "001";
+            elsif h_cnt < (3 * H_VISIBLE / 8) then
+                bar_idx <= "010";
+            elsif h_cnt < (4 * H_VISIBLE / 8) then
+                bar_idx <= "011";
+            elsif h_cnt < (5 * H_VISIBLE / 8) then
+                bar_idx <= "100";
+            elsif h_cnt < (6 * H_VISIBLE / 8) then
+                bar_idx <= "101";
+            elsif h_cnt < (7 * H_VISIBLE / 8) then
+                bar_idx <= "110";
+            else
+                bar_idx <= "111";
+            end if;
+        end if;
+    end process;
+
+    process (bar_idx)
+    begin
+        case to_integer(bar_idx) is
+            when 0 => rgb_r <= x"FF"; rgb_g <= x"FF"; rgb_b <= x"FF";  -- blanco
+            when 1 => rgb_r <= x"FF"; rgb_g <= x"FF"; rgb_b <= x"00";  -- amarillo
+            when 2 => rgb_r <= x"00"; rgb_g <= x"FF"; rgb_b <= x"FF";  -- cian
+            when 3 => rgb_r <= x"00"; rgb_g <= x"FF"; rgb_b <= x"00";  -- verde
+            when 4 => rgb_r <= x"FF"; rgb_g <= x"00"; rgb_b <= x"FF";  -- magenta
+            when 5 => rgb_r <= x"FF"; rgb_g <= x"00"; rgb_b <= x"00";  -- rojo
+            when 6 => rgb_r <= x"00"; rgb_g <= x"00"; rgb_b <= x"FF";  -- azul
+            when 7 => rgb_r <= x"00"; rgb_g <= x"00"; rgb_b <= x"00";  -- negro
+            when others => rgb_r <= x"00"; rgb_g <= x"00"; rgb_b <= x"00";
+        end case;
+    end process;
+
+    -- ========================================================================
+    -- Transmisor TMDS
+    -- ========================================================================
+    hdmi_inst : hdmi_module
+        port map (
+            vga_clk_x5      => clk_serial,
+            vga_clk         => clk_pixel,
+            vga_red_in      => rgb_r,
+            vga_green_in    => rgb_g,
+            vga_blue_in     => rgb_b,
+            vga_hsync_in    => hs,
+            vga_vsync_in    => vs,
+            vga_disp_ena_in => de,
+            tmds_c0_p_out   => tmds_c0_p,
+            tmds_c0_n_out   => tmds_c0_n,
+            tmds_c1_p_out   => tmds_c1_p,
+            tmds_c1_n_out   => tmds_c1_n,
+            tmds_c2_p_out   => tmds_c2_p,
+            tmds_c2_n_out   => tmds_c2_n,
+            tmds_ck_p_out   => tmds_ck_p,
+            tmds_ck_n_out   => tmds_ck_n
+        );
+
+end architecture;

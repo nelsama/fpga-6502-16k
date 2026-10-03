@@ -23,7 +23,7 @@ entity Board is
             spi_mosi : out std_logic;
             spi_sclk : out std_logic;
             spi_cs_n : out std_logic_vector(3 downto 0);
-            -- HDMI (reservado)
+            -- HDMI TMDS (pares diferenciales: P y N por puerto)
             hdmi_tmds_ck_p_out : out std_logic;
             hdmi_tmds_ck_n_out : out std_logic;
             hdmi_tmds_c0_p_out : out std_logic;
@@ -60,6 +60,20 @@ architecture arch of Board is
     signal sid_audio_data : std_logic_vector(17 downto 0);
 
     signal audio_out_mono :std_logic;
+
+    -- Señales del puente CPU -> VRAM (Fase 4)
+    signal vid_we    : std_logic;
+    signal vid_area  : std_logic_vector(1 downto 0);
+    signal vid_addr  : std_logic_vector(10 downto 0);
+    signal vid_data  : std_logic_vector(7 downto 0);
+    signal vid_hi    : std_logic;
+    signal vid_spr   : std_logic;
+    signal vid_status      : std_logic_vector(7 downto 0);
+    signal vid_clear_stats : std_logic;
+    signal vid_cpu_data_out : std_logic_vector(7 downto 0);
+    signal vid_sc_x     : std_logic_vector(10 downto 0);
+    signal vid_sc_y     : std_logic_vector(10 downto 0);
+    signal vid_sc_stride : std_logic_vector(7 downto 0);
 
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
@@ -229,6 +243,58 @@ begin
 
     audio_out_l<=audio_out_mono;
     audio_out_r<=audio_out_mono;
+
+    -- Video HDMI: motor de tiles desde BSRAM + puente CPU->VRAM (Fase 4)
+    video_bus_inst : entity work.video_bus
+    port map (
+        clk_sys     => system_clk,
+        rst_n       => reset,
+        cpu_addr    => addr_bus,
+        cpu_data_in => data_bus,
+        cpu_rw      => r_w,
+        clk_vid     => CLOCK_27_i,
+        vid_we      => vid_we,
+        vid_area    => vid_area,
+        vid_addr    => vid_addr,
+        vid_data    => vid_data,
+        vid_hi      => vid_hi,
+        vid_spr     => vid_spr,
+        status_in    => vid_status,
+        clear_stats  => vid_clear_stats,
+        cpu_data_out => data_bus,
+        sc_x_out     => vid_sc_x,
+        sc_y_out     => vid_sc_y,
+        sc_stride    => vid_sc_stride
+    );
+
+    video_test_inst : entity work.video_core
+    port map (
+        clk_27      => CLOCK_27_i,
+        rst_n       => reset,
+
+        vid_we      => vid_we,
+        vid_area    => vid_area,
+        vid_addr    => vid_addr,
+        vid_data    => vid_data,
+        vid_hi      => vid_hi,
+        vid_spr     => vid_spr,
+        status_out  => vid_status,
+        clear_stats => vid_clear_stats,
+
+        sc_x_in     => vid_sc_x,
+        sc_y_in     => vid_sc_y,
+        sc_we       => '0',
+        sc_stride   => vid_sc_stride,
+
+        tmds_c0_p => hdmi_tmds_c0_p_out,
+        tmds_c0_n => hdmi_tmds_c0_n_out,
+        tmds_c1_p => hdmi_tmds_c1_p_out,
+        tmds_c1_n => hdmi_tmds_c1_n_out,
+        tmds_c2_p => hdmi_tmds_c2_p_out,
+        tmds_c2_n => hdmi_tmds_c2_n_out,
+        tmds_ck_p => hdmi_tmds_ck_p_out,
+        tmds_ck_n => hdmi_tmds_ck_n_out
+    );
 
     ce_sync: process (system_clk) is
     begin
