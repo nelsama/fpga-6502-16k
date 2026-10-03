@@ -540,43 +540,57 @@ izquierda; un objeto 16×16 a 2× se compone con 4 sprites y paso +16.
 > fondo el resto del tiempo, la celda del sprite durante el barrido de colisión.
 > El flag se lee con 1 frame de latencia respecto a la posición (normal en juegos).
 
-**Pendiente (opción):** punto de colisión **configurable por sprite** (pie/cabeza/
-centro) — requeriría ampliar el OAM a 5 bytes por sprite. Por ahora, **punto fijo
-**Pendiente (opción):** ~~punto de colisión configurable por sprite~~ → **implementado en Fase 11**.
+> **Nota:** el puerto B de atributos se multiplexa (`attr_rd_addr`): la celda del
+> fondo el resto del tiempo, la celda del sprite durante el barrido de colisión.
+> El flag se lee con 1 frame de latencia respecto a la posición (normal en juegos).
 
 ---
 
-### Fase 11 — Punto de colisión configurable (OAM 5 bytes) ✅ COMPLETADA
+### Fase 11 — Punto de colisión configurable + auto-escala (OAM 5 bytes) ✅ COMPLETADA
 
 **Objetivo:** que el punto de colisión sprite↔tile sea **configurable por sprite** y
 **cambiable en tiempo real** (p. ej. borde derecho al ir a la derecha, izquierdo al
-ir a la izquierda).
+ir a la izquierda), **sin que el software se preocupe por la escala** 1×/2×.
 
 **Diseño:**
 - **OAM ampliado de 4 a 5 bytes por sprite** (32 × 5 = **160 bytes**).
   - +0 X, +1 Y, +2 TILE, +3 FLAGS, **+4 COLL_POINT**.
 - **COLL_POINT**: `bits 2:0 = dx`, `bits 5:3 = dy` (**offset libre 0-7**).
-  Punto de colisión = `(X + dx, Y + dy)`, cualquier píxel del sprite 8×8.
-- El barrido de colisión usa ese offset en vez del centro fijo.
+- **Auto-escala C+ (en hardware):** el software **siempre usa 0-7**; si el sprite es
+  2×, el hardware escala el offset: `dx 0..6 → dx*2`, `dx=7 → 15`. Así `dx=0/4/7`
+  dan **borde izquierdo / centro / borde derecho** tanto en 1× como en 2×.
+  El software **no necesita saber la escala**.
 - El CPU escribe COLL_POINT como cualquier byte de OAM (índice `sprite*5 + 4`).
 
-**Ejemplos de offset:**
+**Ejemplos de offset (idénticos para 1× y 2×):**
 
-| Punto | dx,dy | Byte |
-|-------|-------|------|
+| Punto | dx, dy | Byte |
+|-------|--------|------|
 | centro | 4,4 | `$24` |
 | pie | 4,7 | `$3C` |
 | cabeza | 4,0 | `$04` |
 | borde izq | 0,4 | `$20` |
 | borde der | 7,4 | `$27` |
 
-**Coste real:** 5.163 → 5.986 LUTs (**+823 LUTs**). **BSRAM: 0.**
+**Coste real:** 5.163 → 5.986 LUTs (estructura OAM 5 bytes) → **+240 LUTs** por la
+auto-escala C+ → **6.224 (72%)**. **BSRAM: 0.**
 
 > **Nota de latencia:** la colisión se recalcula una vez por frame (blanking), así
 > que reaccionar al flag tiene **1 frame de latencia** → el sprite puede “pasarse”
 > ~1 px al chocar. **En el hardware no se compensa**; el juego lo resuelve con un
 > **push-out** de 1 px al rebotar (estándar en juegos). El hardware solo responde
 > “el punto tocó sólido” (sí/no).
+
+#### Colisión sprite↔sprite → POR SOFTWARE
+
+Se evaluó hacer la colisión sprite↔sprite por hardware (2 detectores vs 8-14
+objetivos). **No cabe**: el acceso indexado al OAM (`oam_reg(índice variable)`) se
+sintetiza como **muxes enormes**, y un segundo barrido duplicaba esos muxes
+(~+2.200 celdas, excediendo el dispositivo).
+
+**Decisión:** la colisión **sprite↔sprite se hace por software** (comparar X/Y de los
+objetos en RAM). El hardware solo aporta la colisión **sprite↔tile** (flag global
+`SOLID_HIT`), y el software **deduce cuál sprite chocó** comparando su posición.
 
 ---
 
@@ -597,8 +611,11 @@ ir a la izquierda).
 | **Fase 6 (scroll H/V)** | **4.572** | **26/26** | **2** | 2026-10-03 |
 | **Fase 7 (fuente BSRAM + expansión + VIDEO_READY)** | **4.523** | **26/26** | **2** | 2026-10-02 |
 | **Fase 8 (split de raster 3 bandas)** | **4.699** | **26/26** | **2** | 2026-10-03 |
+| **Fase 9 (escalado 2×) + fix borde sprites** | **4.729** | **26/26** | **2** | 2026-10-03 |
+| **Fase 10 (colisión sprite↔tile, punto centro)** | **5.163** | **26/26** | **2** | 2026-10-03 |
+| **Fase 11 (COLL_POINT + OAM 5 bytes + auto-escala C+)** | **6.224 (72%)** | **26/26** | **2** | 2026-10-03 |
 
-**Margen actual: ~3.941 LUTs (46%) y 0 bloques BSRAM libres (agotada).**
+**Margen actual: ~2.416 celdas (28%) y 0 bloques BSRAM libres (agotada).**
 
 ### 3.2 Estimación de fases restantes
 

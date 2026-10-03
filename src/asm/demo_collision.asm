@@ -23,8 +23,11 @@ VID_DT = $D802
 VID_ST = $D803
 
 XLO     = $10
-DIR     = $11
+DIR0    = $11
 PALF    = $19
+XLO2    = $1A
+HITF    = $1C
+DIR2    = $1D
 
     .segment "CODE"
     .org $8000
@@ -106,7 +109,7 @@ ld_spr:
     LDA #140
     STA XLO
     LDA #0
-    STA DIR            ; 0 = derecha
+    STA DIR0           ; 0 = derecha
     STA PALF           ; paleta del sprite = 0 (fija)
 
     ; X
@@ -147,6 +150,53 @@ ld_spr:
     STA VID_DT
 
     ; ============================================
+    ; 3b) Sprite 1: cuadrado a 2x (16x16), otro color (paleta 1),
+    ;     en fila mas arriba (Y=60) para no chocar con el sprite 0.
+    ;     OAM del sprite 1 = bytes 5..9.
+    ; ============================================
+    LDA #150
+    STA XLO2            ; posicion inicial del 2x
+    LDA #0
+    STA DIR2
+
+    ; X  (byte 5)
+    LDA #$C0
+    STA VID_HI
+    LDA #5
+    STA VID_LO
+    LDA XLO2
+    STA VID_DT
+    ; Y  (byte 6)
+    LDA #$C0
+    STA VID_HI
+    LDA #6
+    STA VID_LO
+    LDA #60
+    STA VID_DT
+    ; TILE (byte 7)
+    LDA #$C0
+    STA VID_HI
+    LDA #7
+    STA VID_LO
+    LDA #0
+    STA VID_DT
+    ; FLAGS (byte 8): SCALE2X (bit4) + paleta 1 (bits 1:0 = 01) = $11
+    LDA #$C0
+    STA VID_HI
+    LDA #8
+    STA VID_LO
+    LDA #$11
+    STA VID_DT
+    ; COLL_POINT (byte 9): borde derecho dx=7, dy=4 -> $27
+    ;   (gracias a C+, dx=7 sirve igual para 1x y 2x)
+    LDA #$C0
+    STA VID_HI
+    LDA #9
+    STA VID_LO
+    LDA #$27
+    STA VID_DT
+
+    ; ============================================
     ; 4) Bucle principal
     ; ============================================
 main_loop:
@@ -157,25 +207,63 @@ wvb:
     BEQ wvb
 
     ; =================== ESTAMOS EN VBLANK ===================
-    ; Leer SOLID_HIT del frame anterior: si toco un tile solido,
-    ; invertir la direccion (rebote) y NO mover este frame.
+    ; El hardware levanta SOLID_HIT (bit5 de $D803) si ALGUN sprite toco un
+    ; tile solido. El software DEDUCE cual/cuales chocaron comparando su borde
+    ; (el que avanza) contra las columnas solidas (X=112 col.14, X=208 col.26).
     LDA VID_ST
     AND #$20            ; bit 5 = SOLID_HIT
-    BEQ sh_no
-    ; --- hubo colision: invertir direccion, no mover este frame ---
-    LDA DIR
+    STA HITF            ; guardar el flag del frame
+
+    ; ---- Sprite 0 (1x): borde = X+7 (der) o X (izq) ----
+    LDA DIR0
+    BNE chk0_l
+    ; va a la derecha -> choca con la columna DERECHA si X+7 >= 206
+    LDA XLO
+    CLC
+    ADC #7
+    CMP #206
+    BCC do0            ; no llego a la columna -> no rebota
+    LDA DIR0
     EOR #$01
-    STA DIR
-    JMP up_x            ; saltar el movimiento (evita pasarse 1 px)
-sh_no:
+    STA DIR0
+    JMP do0
+chk0_l:
+    ; va a la izquierda -> choca con la columna IZQ si X <= 118
+    LDA XLO
+    CMP #119
+    BCS do0            ; X>=119 -> aun no llego -> no rebota
+    LDA DIR0
+    EOR #$01
+    STA DIR0
+do0:
+    ; ---- Sprite 1 (2x): borde = X+15 (der) o X (izq) ----
+    LDA DIR2
+    BNE chk1_l
+    LDA XLO2
+    CLC
+    ADC #15
+    CMP #206
+    BCC do1
+    LDA DIR2
+    EOR #$01
+    STA DIR2
+    JMP do1
+chk1_l:
+    LDA XLO2
+    CMP #119
+    BCS do1
+    LDA DIR2
+    EOR #$01
+    STA DIR2
+do1:
 
 move:
-    ; mover segun direccion
-    LDA DIR
-    BNE mov_l
+    ; mover el sprite 0 segun DIR0
+    LDA DIR0
+    BNE mov0_l
     INC XLO
     JMP up_x
-mov_l:
+mov0_l:
     DEC XLO
 up_x:
     ; escribir X del sprite 0
@@ -194,9 +282,9 @@ up_x:
     STA VID_DT
 
     ; escribir COLL_POINT segun la direccion:
-    ;   derecha (DIR=0) -> borde derecho dx=7 -> $27 (dy=4)
-    ;   izquierda (DIR=1) -> borde izquierdo dx=0 -> $20 (dy=4)
-    LDA DIR
+    ;   derecha (DIR0=0) -> borde derecho dx=7 -> $27 (dy=4)
+    ;   izquierda (DIR0=1) -> borde izquierdo dx=0 -> $20 (dy=4)
+    LDA DIR0
     BNE cp_left
     LDA #$27
     JMP cp_write
@@ -209,6 +297,25 @@ cp_write:
     LDA #4
     STA VID_LO
     LDA $1B
+    STA VID_DT
+
+    ; ============================================
+    ; Sprite 1 (2x): mover segun DIR2 (el rebote lo decide la deduccion de
+    ;   colision de arriba, comparando su borde con las columnas).
+    ; ============================================
+    LDA DIR2
+    BNE mv2_l
+    INC XLO2
+    JMP wr2
+mv2_l:
+    DEC XLO2
+wr2:
+    ; escribir X del sprite 1 (byte 5)
+    LDA #$C0
+    STA VID_HI
+    LDA #5
+    STA VID_LO
+    LDA XLO2
     STA VID_DT
 
     ; esperar salir del VBLANK (bit 7 = 0)

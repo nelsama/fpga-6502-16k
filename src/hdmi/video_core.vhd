@@ -974,6 +974,15 @@ begin
         variable csy : unsigned(7 downto 0);
         variable xce : unsigned(5 downto 0);
         variable yce : unsigned(4 downto 0);
+        variable sdx : unsigned(2 downto 0);
+        variable sdy : unsigned(2 downto 0);
+        variable pdx : unsigned(3 downto 0);
+        variable pdy : unsigned(3 downto 0);
+        variable ox  : integer;
+        variable oy  : integer;
+        variable cix : integer;
+        variable osp2 : std_logic;
+        variable ocp  : std_logic_vector(7 downto 0);
     begin
         if rising_edge(clk_pixel) then
             if rst_n = '0' then
@@ -1003,13 +1012,34 @@ begin
                         -- fin del barrido
                         coll_phase <= 0;
                     else
-                        -- punto de colision configurable por sprite (COLL_POINT, +4)
-                        --   bits 2:0 = dx (0..7), bits 5:3 = dy (0..7)
-                        --   punto = (sx + dx, sy + dy)
-                        csx := unsigned(oam_reg(to_integer(coll_idx) * 5 + 0)) +
-                               resize(unsigned(oam_reg(to_integer(coll_idx) * 5 + 4)(2 downto 0)), 8);
-                        csy := unsigned(oam_reg(to_integer(coll_idx) * 5 + 1)) +
-                               resize(unsigned(oam_reg(to_integer(coll_idx) * 5 + 4)(5 downto 3)), 8);
+                        cix := to_integer(coll_idx);
+                        -- Leer el OAM del sprite actual UNA sola vez.
+                        ox := to_integer(unsigned(oam_reg(cix*5 + 0)));
+                        oy := to_integer(unsigned(oam_reg(cix*5 + 1)));
+                        osp2 := oam_reg(cix*5 + 3)(4);
+                        ocp  := oam_reg(cix*5 + 4);
+
+                        -- (COLISION SPRITE<->TILE con auto-escala C+)
+                        sdx := unsigned(ocp(2 downto 0));
+                        sdy := unsigned(ocp(5 downto 3));
+                        if osp2 = '1' then
+                            -- 2x: escala (dx 0..6 -> *2 ; dx=7 -> 15)
+                            if sdx = 7 then
+                                pdx := to_unsigned(15, 4);
+                            else
+                                pdx := resize(sdx(2 downto 0) & '0', 4);
+                            end if;
+                            if sdy = 7 then
+                                pdy := to_unsigned(15, 4);
+                            else
+                                pdy := resize(sdy(2 downto 0) & '0', 4);
+                            end if;
+                        else
+                            pdx := resize(sdx, 4);
+                            pdy := resize(sdy, 4);
+                        end if;
+                        csx := to_unsigned(ox, 8) + resize(pdx, 8);
+                        csy := to_unsigned(oy, 8) + resize(pdy, 8);
                         xce := resize(csx srl 3, 6);  -- celda X /8 (6 bits, 0..63)
                         yce := resize(csy srl 3, 5);  -- celda Y /8 (5 bits, 0..31)
                         -- celda = y_celda * 64 + x_celda

@@ -458,38 +458,65 @@ put_char:
 
 ### 10.3 Punto de colisión (COLL_POINT)
 
-- `COLL_POINT`: `bits 2:0 = dx`, `bits 5:3 = dy` (offset libre 0-7).
-- Punto de colisión = `(X+dx, Y+dy)`.
+- `COLL_POINT`: `bits 2:0 = dx`, `bits 5:3 = dy` (**offset libre 0-7**).
+- **Auto-escala (en hardware):** **siempre escribes dx/dy en escala 0-7** (como si el
+  sprite fuera 1×). Si el sprite tiene `SCALE2X`, el hardware **escala el punto
+  automáticamente**: `dx 0..6 → dx*2`, `dx=7 → 15`. Así **no tienes que saber la
+  escala**: los mismos valores dan los mismos puntos lógicos.
 
-| Punto | Byte |
-|-------|------|
-| centro | `$24` |
-| pie | `$3C` |
-| cabeza | `$04` |
-| borde izq | `$20` |
-| borde der | `$27` |
+| Punto | Byte | 1× alcanza | 2× alcanza |
+|-------|------|-----------|-----------|
+| centro | `$24` | 4 | 8 |
+| pie | `$3C` | 7 | 15 |
+| cabeza | `$04` | 0 | 0 |
+| borde izq | `$20` | 0 | 0 |
+| borde der | `$27` | 7 | 15 |
 
-### 10.4 Patrón de uso (plataformas)
+> **Nota:** en 2× solo se alcanzan las posiciones **pares** + el borde (15). Es
+> suficiente para los puntos útiles (bordes, centro, pie, cabeza).
+
+### 10.4 Patrón de uso (varios sprites: deducción en software)
+
+El flag `SOLID_HIT` es **global** (no dice **qué** sprite chocó). Si tienes varios
+objetos, cada uno con su posición en RAM, **deduces cuál chocó** comparando su borde
+(el que avanza) contra la columna/pared:
 
 ```asm
 ; cada frame, en VBLANK:
 ;   1) ajustar COLL_POINT segun direccion (borde que avanza)
-;   2) leer SOLID_HIT; si activo, rebotar (y opcional push-out 1 px)
-    LDA DIR
-    BNE car_izq
-    LDA #$27               ; va a la derecha -> borde derecho
-    JMP car_wr
-car_izq:
-    LDA #$20               ; va a la izquierda -> borde izquierdo
-car_wr:
-    ; escribir COLL_POINT del sprite 0 (campo 4)
-    LDX #0
-    LDY #4
-    JSR oam_put            ; (A = valor, X = sprite, Y = campo)
+;   2) LEER SOLID_HIT; si activo, deducir QUE sprite choco comparando su borde
+;      con la posicion de la pared, y rebotar SOLO ese.
+    LDA $D803
+    AND #$20               ; SOLID_HIT
+    BEQ no_hay
+    ; --- deducir sprite 0 ---
+    LDA DIR0
+    BNE s0_izq
+    LDA X0 : CLC : ADC #7  ; borde derecho
+    CMP PARED_X_IZQ        ; ¿llego a la pared?
+    BCC s0_no
+    LDA DIR0 : EOR #$01 : STA DIR0
+s0_no:
+    ; (repetir para el sprite 1 con su borde = X+15 si es 2x)
+no_hay:
 ```
 
-> La detección tiene **1 frame de latencia**; al chocar el sprite puede "pasarse"
-> ~1 px. Compénsalo con un push-out (retroceder 1 px) al rebotar.
+> **Regla:** el hardware dice **"alguien chocó"**; el software dice **"quién"**.
+> Para 1 solo objeto colisionador, el flag basta sin deducción.
+
+> **Latencia:** 1 frame (la colisión se recalcula en el blanking). Al chocar el
+> sprite puede "pasarse" ~1 px; compénsalo con push-out si lo necesitas.
+
+### 10.5 Colisión sprite↔sprite → SOFTWARE
+
+**No hay colisión sprite↔sprite en hardware.** Se hace en software comparando las
+cajas (AABB) de los objetos, cuyas posiciones ya tienes en RAM:
+
+```asm
+; ¿colisionan el sprite A (xa,ya) y el B (xb,yb)?  (8x8)
+    LDA xa : SEC : SBC xb
+    ; |dx| < 8 ?  y  |dy| < 8 ?  -> colision
+```
 
 ---
 
@@ -640,6 +667,8 @@ msg:
 | Mapa | 64×32 | scroll con envoltura |
 | BSRAM | **agotada** | no cabe framebuffer ni tilemap doble |
 | Colisión sprite↔sprite | **no hay** | hacer por software (comparar X/Y) |
+| Colisión sprite↔tile | flag **global** | no dice qué sprite; deducir por software |
+| COLL_POINT | dx, dy **0-7** | auto-escala a 0-15 si el sprite es 2× |
 | Rotación de sprites | **no hay** | usar sprites pre-rotados |
 
 **Buenas prácticas:**
