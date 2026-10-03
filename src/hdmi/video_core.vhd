@@ -219,8 +219,10 @@ architecture rtl of video_core is
 
     -- Paletas de SPRITE (índice = paleta[3:2] + color[1:0]).
     -- El color 0 (transparente) de cada paleta se ignora en el render.
+    --   Paleta 0: pensada para personajes -> piel / marron / negro
+    --             (indice 1 = piel rojiza, 2 = marron, 3 = negro)
     constant SPR_PALETTE : pal_t := (
-        x"000", x"F00", x"FF0", x"FFF",   -- paleta 0 - rojo / amarillo / blanco
+        x"000", x"F80", x"840", x"000",   -- paleta 0 - piel / marron / negro
         x"000", x"00F", x"0FF", x"FFF",   -- paleta 1 - azul / cian / blanco
         x"000", x"F0F", x"F00", x"FFF",   -- paleta 2 - magenta / rojo / blanco
         x"000", x"0F0", x"F80", x"FFF"    -- paleta 3 - verde / naranja / blanco
@@ -299,11 +301,13 @@ architecture rtl of video_core is
     type lb_attr_t is array (0 to NSL-1) of std_logic_vector(11 downto 0);
     type lb_pal_t  is array (0 to NSL-1) of std_logic_vector(3 downto 0);
     type lb_row_t is array (0 to NSL-1) of unsigned(2 downto 0);
+    type lb_scale_t is array (0 to NSL-1) of std_logic;   -- 1 = sprite a 2x
 
     signal lb_x    : lb_x_t := (others => (others => '0'));
     signal lb_attr : lb_attr_t := (others => (others => '0'));
     signal lb_pal  : lb_pal_t := (others => (others => '0'));
     signal lb_row  : lb_row_t := (others => (others => '0'));
+    signal lb_scale: lb_scale_t := (others => '0');
     signal lb_n    : unsigned(3 downto 0) := (others => '0');  -- cuantos hay
 
     -- Indicador de "line buffer listo": se pone a 1 cuando el barrido del OAM
@@ -324,7 +328,18 @@ architecture rtl of video_core is
     signal lb_pick_prio : std_logic := '0';   -- 1 = sprite DETRAS del fondo
     signal lb_pick_fx   : std_logic := '0';   -- flip X
     signal lb_pick_fy   : std_logic := '0';   -- flip Y
+    signal lb_pick_scale: std_logic := '0';   -- 1 = dibujar a 2x
     signal lb_pick_ok   : std_logic := '0';
+
+    -- Version RETRASADA 1 ciclo de la seleccion, para alinear con spr_pat_data
+    -- (la BSRAM de patrones tiene 1 ciclo de latencia; sin este retardo, en el
+    --  borde entre dos sprites distintos se mezcla el patron de uno con la X
+    --  del otro -> linea de 1 pixel entre sprites compuestos).
+    signal lb_pick_x_d    : unsigned(7 downto 0) := (others => '0');
+    signal lb_pick_fx_d   : std_logic := '0';
+    signal lb_pick_scale_d: std_logic := '0';
+    signal lb_pick_ok_d   : std_logic := '0';
+    signal x0_log_d       : unsigned(8 downto 0) := (others => '0');
 
     signal line_y       : unsigned(7 downto 0) := (others => '0');
 
@@ -969,6 +984,8 @@ begin
         variable sx     : unsigned(7 downto 0);
         variable stile  : std_logic_vector(5 downto 0);
         variable spal   : std_logic_vector(3 downto 0);
+        variable sscale : std_logic;
+        variable span   : unsigned(7 downto 0);   -- alto en lineas (8 o 16)
         variable k      : integer range 0 to NSL;
     begin
         if rising_edge(clk_pixel) then
@@ -988,6 +1005,7 @@ begin
                         lb_attr(k) <= (others => '0');
                         lb_pal(k)  <= (others => '0');
                         lb_row(k)  <= (others => '0');
+                        lb_scale(k) <= '0';
                     end loop;
                 elsif oam_scan < 32 then
                     -- evaluar el sprite 'oam_scan'
@@ -995,9 +1013,17 @@ begin
                     sx     := unsigned(oam_reg(to_integer(oam_scan) * 4 + 0));
                     stile  := oam_reg(to_integer(oam_scan) * 4 + 2)(5 downto 0);
                     spal   := oam_reg(to_integer(oam_scan) * 4 + 3)(3 downto 0);
+                    sscale := oam_reg(to_integer(oam_scan) * 4 + 3)(4);  -- SCALE2X
+
+                    -- alcance vertical: 8 lineas (1x) o 16 lineas (2x)
+                    if sscale = '1' then
+                        span := to_unsigned(16, 8);
+                    else
+                        span := to_unsigned(8, 8);
+                    end if;
 
                     -- si cruza la linea y hay hueco, guardarlo
-                    if (sy < 248) and (sy <= line_y) and (sy + 8 > line_y)
+                    if (sy < 248) and (sy <= line_y) and (sy + span > line_y)
                        and (lb_n < NSL) then
                         lb_x(to_integer(lb_n)) <= sx;
                         -- attr: tile(6) + prio + flipx + flipy
@@ -1007,11 +1033,23 @@ begin
                                                      oam_reg(to_integer(oam_scan) * 4 + 3)(7) &
                                                      "000";
                         lb_pal(to_integer(lb_n)) <= spal;
-                        -- fila: si FLIP_Y, invertir (7 - row)
-                        if oam_reg(to_integer(oam_scan) * 4 + 3)(7) = '1' then
-                            lb_row(to_integer(lb_n)) <= 7 - resize(line_y - sy, 3);
+                        lb_scale(to_integer(lb_n)) <= sscale;
+                        -- fila del patron:
+                        --   1x: row = line_y - sy            (0..7)
+                        --   2x: row = (line_y - sy) / 2      (0..7)
+                        if sscale = '1' then
+                            if oam_reg(to_integer(oam_scan) * 4 + 3)(7) = '1' then
+                                lb_row(to_integer(lb_n)) <= 7 - resize((line_y - sy)/2, 3);
+                            else
+                                lb_row(to_integer(lb_n)) <= resize((line_y - sy)/2, 3);
+                            end if;
                         else
-                            lb_row(to_integer(lb_n)) <= resize(line_y - sy, 3);
+                            -- fila: si FLIP_Y, invertir (7 - row)
+                            if oam_reg(to_integer(oam_scan) * 4 + 3)(7) = '1' then
+                                lb_row(to_integer(lb_n)) <= 7 - resize(line_y - sy, 3);
+                            else
+                                lb_row(to_integer(lb_n)) <= resize(line_y - sy, 3);
+                            end if;
                         end if;
                         lb_n <= lb_n + 1;
                     end if;
@@ -1028,10 +1066,11 @@ begin
     --   Solo actua cuando lb_ready='1' (buffer completamente lleno) y considera
     --   UNICAMENTE las primeras 'lb_n' entradas validas. Las restantes pueden
     --   contener datos de lineas anteriores y NO deben leerse.
-    process (x0_log, lb_x, lb_attr, lb_pal, lb_row, lb_n, lb_ready)
+    process (x0_log, lb_x, lb_attr, lb_pal, lb_row, lb_scale, lb_n, lb_ready)
         variable found : std_logic;
         variable i     : integer range 0 to NSL;
         variable lim   : integer range 0 to NSL;
+        variable xwid  : unsigned(8 downto 0);
     begin
         found := '0';
         lb_pick_ok   <= '0';
@@ -1042,6 +1081,7 @@ begin
         lb_pick_prio <= '0';
         lb_pick_fx   <= '0';
         lb_pick_fy   <= '0';
+        lb_pick_scale<= '0';
         lim := to_integer(lb_n);
         if lim > NSL then
             lim := NSL;
@@ -1049,8 +1089,14 @@ begin
         if lb_ready = '1' then
             i := 0;
             while (i < lim) and (found = '0') loop
+                -- ancho en pantalla: 8 px (1x) o 16 px (2x)
+                if lb_scale(i) = '1' then
+                    xwid := to_unsigned(16, 9);
+                else
+                    xwid := to_unsigned(8, 9);
+                end if;
                 if (resize(unsigned(lb_x(i)), 9) <= x0_log) and
-                   (resize(unsigned(lb_x(i)), 9) + 8 > x0_log) then
+                   (resize(unsigned(lb_x(i)), 9) + xwid > x0_log) then
                     found := '1';
                     lb_pick_ok   <= '1';
                     lb_pick_x    <= lb_x(i);
@@ -1058,6 +1104,7 @@ begin
                     lb_pick_prio <= lb_attr(i)(5);
                     lb_pick_fx   <= lb_attr(i)(4);
                     lb_pick_fy   <= lb_attr(i)(3);
+                    lb_pick_scale<= lb_scale(i);
                     lb_pick_pal  <= lb_pal(i);
                     lb_pick_row  <= lb_row(i);
                 end if;
@@ -1083,21 +1130,39 @@ begin
                 spr_pixcode <= (others => '0');
                 spr_active1 <= '0';
                 spr_pixcode1 <= (others => '0');
+                lb_pick_x_d     <= (others => '0');
+                lb_pick_fx_d    <= '0';
+                lb_pick_scale_d <= '0';
+                lb_pick_ok_d    <= '0';
             else
                 -- Etapa A -> B
                 spr_active1  <= spr_active;
                 spr_pixcode1 <= spr_pixcode;
 
+                -- Retardo de la seleccion para alinearla con spr_pat_data (BSRAM
+                -- 1 ciclo de latencia). Evita la linea de 1 px entre sprites.
+                lb_pick_x_d     <= lb_pick_x;
+                lb_pick_fx_d    <= lb_pick_fx;
+                lb_pick_scale_d <= lb_pick_scale;
+                lb_pick_ok_d    <= lb_pick_ok;
+                x0_log_d        <= x0_log;
+
                 -- Etapa A: calcular a partir de spr_pat_data (ya alineado)
                 spr_active  <= '0';
                 spr_pixcode <= (others => '0');
-                xp9 := resize(lb_pick_x, 9);
-                if lb_pick_ok = '1' and (x0_log >= xp9) and
-                   (x0_log < xp9 + 8) then
-                    sx  := x0_log - xp9;
-                    idx := to_integer(sx(2 downto 0));
+                xp9 := resize(lb_pick_x_d, 9);
+                if lb_pick_ok_d = '1' and (x0_log_d >= xp9) and
+                   ((lb_pick_scale_d = '0' and (x0_log_d < xp9 + 8)) or
+                    (lb_pick_scale_d = '1' and (x0_log_d < xp9 + 16))) then
+                    sx  := x0_log_d - xp9;
+                    if lb_pick_scale_d = '1' then
+                        -- 2x: dos pixeles de pantalla por uno de origen (sx/2).
+                        idx := to_integer(sx(3 downto 1));
+                    else
+                        idx := to_integer(sx(2 downto 0));
+                    end if;
                     -- FLIP_X: invertir el indice horizontal (7 - idx)
-                    if lb_pick_fx = '1' then
+                    if lb_pick_fx_d = '1' then
                         idx := 7 - idx;
                     end if;
                     spr_pixcode <= spr_pat_data(15 - idx) & spr_pat_data(7 - idx);
