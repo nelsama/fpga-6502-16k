@@ -57,19 +57,13 @@ reset:
     LDX #$FF
     TXS
 
-    LDX #$00
-    LDY #$00
-d1:
-    DEX
-    BNE d1
-    DEY
-    BNE d1
-    LDY #$00
-d2:
-    DEX
-    BNE d2
-    DEY
-    BNE d2
+    ; Esperar VIDEO_READY (bit 4 de $D803): la init de VRAM termino.
+    ;   Sustituye a los retardos a ciegas (d1/d2). Ahora la lectura de $D803
+    ;   esta decodificada por el data_bus_mux (Fase 8.1), asi que es fiable.
+wait_ready:
+    LDA VID_ST
+    AND #$10            ; bit 4 = VIDEO_READY
+    BEQ wait_ready
 
     ; scroll de la banda media = 0
     LDA #0

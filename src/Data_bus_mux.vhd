@@ -12,6 +12,7 @@ entity data_bus_mux is
             rom_data_bus_in : in std_logic_vector(7 downto 0);
             port1_in : in std_logic_vector(7 downto 0);
             port2_in : in std_logic_vector(7 downto 0);
+            video_data_bus_in : in std_logic_vector(7 downto 0);  -- STATUS del video ($D803)
 
             rom_addr_out : out std_logic_vector(15 downto 0);  -- NUEVO: dirección para la ROM
             data_bus_out : out std_logic_vector(7 downto 0)
@@ -61,7 +62,7 @@ begin
     rom_addr_out <= std_logic_vector(rom_physical_addr);
 
     -- === MULTIPLEXOR DE DATOS ===
-    process(clk, r_w, addr_in, ram_data_bus_in, rom_data_bus_in, port1_in, port2_in)
+    process(clk, r_w, addr_in, ram_data_bus_in, rom_data_bus_in, port1_in, port2_in, video_data_bus_in)
     begin
         if(falling_edge(clk)) then
             if ((addr_unsigned >= RAM_BASE) and (addr_unsigned <= RAM_END) and r_w='1') then 
@@ -80,7 +81,13 @@ begin
             elsif (addr_in = x"C001" and r_w='1') then 
                 -- Puerto 2
                 data_bus_out <= port2_in; 
-                
+
+            elsif (addr_in = x"D803" and r_w='1') then
+                -- STATUS del video ($D803): VBLANK / OVERFLOW / VIDEO_READY
+                -- (Fase 8.1: lectura fiable del estado del video, antes dependia
+                --  de la resolucion de 'Z' entre el mux y el video_bus)
+                data_bus_out <= video_data_bus_in;
+
             else
                 data_bus_out <= "ZZZZZZZZ";
             end if; 

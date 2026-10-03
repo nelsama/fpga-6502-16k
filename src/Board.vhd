@@ -267,7 +267,7 @@ begin
         vid_spr     => vid_spr,
         status_in    => vid_status,
         clear_stats  => vid_clear_stats,
-        cpu_data_out => data_bus,
+        cpu_data_out => vid_cpu_data_out,
         sc_x_out     => vid_sc_x,
         sc_y_out     => vid_sc_y,
         sc_stride    => vid_sc_stride,
@@ -359,6 +359,7 @@ begin
         rom_data_bus_in=>rom_data_bus,
         port1_in=>port_in1,
         port2_in=>port_in2,
+        video_data_bus_in=>vid_cpu_data_out,
         data_bus_out=>data_bus,
         rom_addr_out=>rom_addr_out
     );

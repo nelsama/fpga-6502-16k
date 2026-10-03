@@ -149,17 +149,17 @@ recursos (4.572 LUTs, sin cambios respecto a la versión solo-horizontal).
 
 ---
 
-## 5. Pendiente: lectura de `$D803` (VIDEO_READY)
+## 5. Lectura de `$D803` (VIDEO_READY) — RESUELTO (Fase 8.1)
 
-Quedó una **duda sin resolver**: si la lectura del STATUS (`$D803`) funciona.
+La lectura del STATUS (`$D803`) **funciona de forma fiable**. El fix consistió en:
 
-- El `Data_bus_mux` **no decodifica** el rango `$D800–$D807`.
-- Al leer `$D803`, el mux pone `'Z'` y el `video_bus` pone el STATUS.
-- **No se validó** que la lectura llegue limpia al CPU (posible conflicto de drivers).
+- El `Data_bus_mux` **ya decodifica** `$D803` explícitamente (puerto `video_data_bus_in`),
+  seleccionando el dato del video en vez de dejar el bus en `'Z'`.
+- El `cpu_data_out` del `video_bus` se conecta a ese puerto dedicado (no directo al bus).
+- Los programas ahora usan `VIDEO_READY` (bit 4) en el arranque en vez de retardos por software.
 
-**Impacto:** los programas usan **retardo por software** en vez de `VIDEO_READY`.
-Funciona, pero es frágil. **Recomendación:** añadir la decodificación de `$D800–$D807`
-en `Data_bus_mux` o al menos de `$D803`, y pasar a usar `VIDEO_READY`.
+**Resultado:** la demo `demo_raster.asm` arranca con `wait_ready` (poll del bit 4) y se
+visualiza correctamente, validando tanto `VIDEO_READY` como `VBLANK`.
 
 ---
 

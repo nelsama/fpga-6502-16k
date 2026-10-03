@@ -643,11 +643,13 @@ H/V, split de raster con HUD fijo arriba/abajo).
 1. **Fase 9 — Escalado 2× de sprites** — sin rotación (descartada).
 2. **Colisiones** sprite-sprite / sprite-tile (por software o hardware parcial).
 3. **Mapa 40×50** para shooters verticales (`mod 30`→`mod 50`).
-4. **Data_bus_mux**: decodificar `$D800–$D807` para lectura fiable de `$D803`.
-5. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
-6. **Cursor / scroll de texto** — rutina de consola en software.
-7. **Integración con el monitor** — cargar juegos de SD a RAM.
-8. **Medir el audio (SID)** con el TMDS activo → valida o invalida R-01.
+4. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
+5. **Cursor / scroll de texto** — rutina de consola en software.
+6. **Integración con el monitor** — cargar juegos de SD a RAM.
+7. **Medir el audio (SID)** con el TMDS activo → valida o invalida R-01.
+
+> **Completado en Fase 8.1:** lectura fiable de `$D803` (decodificación del `data_bus_mux`
+> + `VIDEO_READY` en el arranque).
 
 **Al final (análisis A):** modo bitmap — requiere repartir la BSRAM (agotada).
 
