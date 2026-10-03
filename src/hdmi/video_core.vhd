@@ -340,8 +340,28 @@ architecture rtl of video_core is
     signal lb_pick_scale_d: std_logic := '0';
     signal lb_pick_ok_d   : std_logic := '0';
     signal x0_log_d       : unsigned(8 downto 0) := (others => '0');
+    -- paleta del sprite retrasada 2 ciclos (etapa B), para alinear con
+    -- spr_pixcode1 / spr_active1. Sin esto, la paleta (combinacional) se
+    -- combinaba con un pixel de 2 ciclos antes -> parte del sprite cambiaba
+    -- de color y parte no.
+    signal spr_pal_a      : std_logic_vector(3 downto 0) := (others => '0');
+    signal spr_pal_b      : std_logic_vector(3 downto 0) := (others => '0');
 
     signal line_y       : unsigned(7 downto 0) := (others => '0');
+
+    -- ========================================================================
+    -- COLISION SPRITE <-> TILE SOLIDO (punto = centro del sprite)
+    --   Durante el blanking vertical se recorren los 32 sprites y, para cada
+    --   uno, se lee el atributo de la celda donde cae su CENTRO. Si el bit 4
+    --   (SOLIDO) esta a 1, se marca el flag de colision de ese sprite.
+    -- ========================================================================
+    signal coll_phase    : integer range 0 to 1 := 0;   -- 0=idle, 1=barrido
+    signal coll_idx      : unsigned(5 downto 0) := (others => '0');  -- 0..32
+    signal coll_addr     : unsigned(10 downto 0) := (others => '0');
+    signal coll_pending  : std_logic := '0';    -- lectura de atributo en curso
+    signal coll_flag     : std_logic_vector(31 downto 0) := (others => '0');
+    signal attr_rd_addr  : unsigned(10 downto 0) := (others => '0');
+    signal solid_hit     : std_logic := '0';   -- OR de coll_flag
 
     -- Patron del sprite (banco spr_pat de 64 patrones de 8x8)
     signal spr_pat_addr : unsigned(8 downto 0) := (others => '0');   -- 0..511
@@ -931,6 +951,75 @@ begin
     end process;
 
     -- ========================================================================
+    -- MUX de lectura de atributo: durante el barrido de colision (blanking
+    -- vertical) el puerto B lee la celda del CENTRO del sprite; el resto del
+    -- tiempo lee la celda del fondo (cell_addr).
+    -- ========================================================================
+    attr_rd_addr <= coll_addr when (coll_phase = 1) else cell_addr;
+
+    -- ========================================================================
+    -- BARRI DO DE COLISION SPRITE<->TILE SOLIDO (punto = centro)
+    --   Ocurre una vez por frame, durante el blanking vertical (v_cnt >= V_VISIBLE),
+    --   momento en el que el fondo no dibuja y el puerto B de atributos esta libre.
+    --   Para cada sprite (0..31):
+    --     centro = (sx + 4, sy + 4)  (y el bit 4 del atributo = SOLIDO)
+    --     celda = (centro_x/8) + (centro_y/8)*64
+    --   La BSRAM de atributo tiene 1 ciclo de latencia: se pide en el ciclo N y
+    --   se captura el resultado en N+1.
+    -- ========================================================================
+    process (clk_pixel)
+        variable csx : unsigned(7 downto 0);
+        variable csy : unsigned(7 downto 0);
+        variable xce : unsigned(5 downto 0);
+        variable yce : unsigned(4 downto 0);
+    begin
+        if rising_edge(clk_pixel) then
+            if rst_n = '0' then
+                coll_phase   <= 0;
+                coll_idx     <= (others => '0');
+                coll_addr    <= (others => '0');
+                coll_pending <= '0';
+                coll_flag    <= (others => '0');
+            elsif coll_phase = 0 then
+                -- esperar el inicio del blanking vertical
+                if v_cnt = V_VISIBLE and h_cnt = 0 then
+                    coll_phase   <= 1;
+                    coll_idx     <= (others => '0');
+                    coll_pending <= '0';
+                    coll_flag    <= (others => '0');
+                end if;
+            else
+                -- coll_phase = 1: barrido de los 32 sprites
+                if coll_pending = '1' then
+                    -- el dato del atributo ya esta disponible; capturar bit 4
+                    if attr_dout(4) = '1' then
+                        coll_flag(to_integer(coll_idx - 1)) <= '1';
+                    end if;
+                    coll_pending <= '0';
+                else
+                    if coll_idx = 32 then
+                        -- fin del barrido
+                        coll_phase <= 0;
+                    else
+                        -- centro del sprite (8x8): +4 en cada eje
+                        csx := unsigned(oam_reg(to_integer(coll_idx) * 4 + 0)) + 4;
+                        csy := unsigned(oam_reg(to_integer(coll_idx) * 4 + 1)) + 4;
+                        xce := resize(csx srl 3, 6);  -- celda X /8 (6 bits, 0..63)
+                        yce := resize(csy srl 3, 5);  -- celda Y /8 (5 bits, 0..31)
+                        -- celda = y_celda * 64 + x_celda
+                        coll_addr <= yce & xce;
+                        coll_pending <= '1';
+                        coll_idx <= coll_idx + 1;
+                    end if;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    -- bit global de colision: 1 si cualquier sprite toco un tile solido
+    solid_hit <= '1' when (coll_flag /= x"00000000") else '0';
+
+    -- ========================================================================
     -- VRAM
     --   El puerto A se multiplexa: durante la inicializacion (init_done='0')
     --   escribe el bloque de init; despues, el CPU. Como ambos dominios son
@@ -949,7 +1038,7 @@ begin
             clk_b       => clk_pixel,
             tile_addr_b => std_logic_vector(cell_addr),
             tile_data_b => tile_dout,
-            attr_addr_b => std_logic_vector(cell_addr),
+            attr_addr_b => std_logic_vector(attr_rd_addr),
             attr_data_b => attr_dout,
             pat_addr_b  => std_logic_vector(pat_addr),
             pat_data_b  => pat_dout,
@@ -1139,6 +1228,11 @@ begin
                 spr_active1  <= spr_active;
                 spr_pixcode1 <= spr_pixcode;
 
+                -- Paleta: 2 registros (etapa A -> B) para alinearla con
+                -- spr_pixcode1. spr_pal_a es etapa A, spr_pal_b etapa B.
+                spr_pal_a <= lb_pick_pal;
+                spr_pal_b <= spr_pal_a;
+
                 -- Retardo de la seleccion para alinearla con spr_pat_data (BSRAM
                 -- 1 ciclo de latencia). Evita la linea de 1 px entre sprites.
                 lb_pick_x_d     <= lb_pick_x;
@@ -1177,7 +1271,8 @@ begin
 
     -- paleta del sprite: 2 bits de paleta + 2 bits de color (banco SEPARADO
     -- del fondo). El color 0 (transparente) ya se descarta via spr_active.
-    spl_pal_sel2 <= lb_pick_pal(1 downto 0);
+    --   spr_pal_b es la paleta alineada a la etapa B (con spr_pixcode1).
+    spl_pal_sel2 <= spr_pal_b(1 downto 0);
     spr_pal_idx  <= spl_pal_sel2 & spr_pixcode1;
     spr_rgb      <= SPR_PALETTE(to_integer(unsigned(spr_pal_idx)));
 
@@ -1221,8 +1316,10 @@ begin
         end if;
     end process;
 
-    -- bit7 VBLANK | bit6 OVERFLOW | bit5 HIT(0) | bit4 READY | bit3..0 reservado
-    status_reg <= vblank_f & overflow_f & '0' & init_done & "0000";
+    -- bit7 VBLANK | bit6 OVERFLOW | bit5 SOLID_HIT | bit4 READY | bit3..0 rsv
+    --   bit5 = '1' si CUALQUIER sprite colisiona con un tile solido (bit 4 del
+    --   atributo) durante el frame. Se actualiza una vez por frame (blanking).
+    status_reg <= vblank_f & overflow_f & solid_hit & init_done & "0000";
     status_out <= status_reg;
 
     -- ========================================================================

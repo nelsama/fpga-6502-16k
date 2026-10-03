@@ -83,11 +83,18 @@ Cada fila se descompone en un byte de cada plano. El patrón completo son
 | 7 | `PRIO` | 0 / 1 | **1** = delante de los sprites; **0** = detrás |
 | 6 | `FLIP_Y` | 0 / 1 | Volteo vertical (invertir orden de filas) |
 | 5 | `FLIP_X` | 0 / 1 | Volteo horizontal (invertir bits del byte) |
-| 4:0 | `PALETA` | 0–31 | Índice de paleta |
+| **4** | **`SOLIDO`** | 0 / 1 | **1** = celda sólida (colisión sprite↔tile, Fase 10) |
+| 3:0 | `PALETA` | 0–15 | Índice de paleta |
 
-> **Nota de diseño:** hay 5 bits reservados para paleta pero 16 paletas
-> planificadas. El bit 4 queda disponible para ampliar a 32 paletas, o para
-> otro flag (p. ej. prioridad fina o máscara).
+> **Nota de diseño:** el bit 4 se usa ahora como flag `SOLIDO` para la colisión
+> sprite↔tile (Fase 10). La paleta de fondo queda en 16 valores (bits 3:0).
+
+### 2.0 Colisión sprite↔tile (Fase 10)
+
+El bit 4 del atributo (`SOLIDO`) habilita la detección de colisión: una vez por
+frame, el hardware recorre los 32 sprites y, para el **centro** de cada uno, lee
+el atributo de su celda. Si el bit 4 = 1, el sprite “toca” un tile sólido.
+El resultado global es el bit 5 de `$D803` (`SOLID_HIT`).
 
 ### 2.1 Cómo el motor aplica el atributo
 
@@ -303,7 +310,7 @@ no hay banda superior y todo arranca en la banda media (equivale a 2 bandas).
 |------|-------|-------------|
 | 7 | `VBLANK` | 1 = en vblank (seguro escribir VRAM) |
 | 6 | `SPRITE_OVERFLOW` | Más de 8 sprites en una línea (se recalcula por línea) |
-| 5 | — | reservado (HIT descartado por coste, ver plan §5.4) |
+| 5 | **`SOLID_HIT`** | 1 = algún sprite tocó un tile sólido (colisión sprite↔tile, Fase 10) |
 | **4** | **`VIDEO_READY`** | 1 = inicialización de la VRAM terminada |
 | 3:0 | — | reservado |
 

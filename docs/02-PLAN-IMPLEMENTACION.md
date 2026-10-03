@@ -495,23 +495,54 @@ usa `raster_line0 = 24` (banda superior de 3 filas: 0 de margen + 2 de HUD).
 
 ---
 
-### Fase 9 — Escalado 2× de sprites
+### Fase 9 — Escalado 2× de sprites ✅ COMPLETADA
 
 **Objetivo:** sprites al doble de tamaño (16×16 y 32×32 efectivos) por hardware.
-(Se **descarta la rotación**: encarece el datapath y no es prioridad.)
+(La rotación queda descartada: encarece el datapath y no es prioridad.)
 
-| Tarea | Detalle |
-|-------|---------|
-| Bit de escala por sprite | campo en OAM (FLAGS), ej. bit4 (reservado hoy) |
-| Repetición de pixel | duplicar bit/hilo o hilo completo según eje |
-| Coordenadas de sprite en OAM | ya soportan el rango necesario |
-| Interacción con line buffer | entrada ocupa 2× ancho por línea |
+**Estado:** VALIDADO — bit 4 de FLAGS (`SCALE2X`) escala el sprite 8×8 a 16×16
+en pantalla. La escala es **por sprite de 8×8** con anclaje en la esquina superior
+izquierda; un objeto 16×16 a 2× se compone con 4 sprites y paso +16.
 
-**Entregable:** sprite 16×16 dibujado a 32×32 sin coste de CPU.
-**Criterio de éxito:** bordes nítidos (bloques 2×2), sin artefactos de line buffer.
+| Tarea | Estado |
+|-------|--------|
+| Bit 4 de FLAGS = `SCALE2X` | ✅ |
+| Line buffer: array `lb_scale` + cobertura 16 líneas / 16 px | ✅ |
+| Fila del patrón `= (line_y - sy)/2` (con FLIP_Y) | ✅ |
+| Índice X del patrón `= sx/2` | ✅ |
 
-**Coste estimado:** ~80–150 LUT. **BSRAM: 0.** DSP: 0.
-**Riesgo:** bajo-medio (el line buffer debe manejar el doble de ancho por línea).
+**Coste real:** 4.536 → 4.729 LUTs (**+193 LUTs**). **BSRAM: 0.**
+
+> **Bug corregido (borde entre sprites):** la BSRAM de patrones tiene 1 ciclo de
+> latencia, pero la Etapa A combinaba `spr_pat_data` (ciclo N-1) con `lb_pick_x`/
+> `x0_log` (ciclo N) → en el borde entre sprites distintos se mezclaba un píxel
+> del patrón anterior = **línea de 1 px**. Fix: retrasar 1 ciclo `lb_pick_x`,
+> `lb_pick_fx`, `lb_pick_scale`, `lb_pick_ok` y `x0_log` (`*_d`). Este bug estaba
+> latente también en los sprites compuestos 1×.
+
+---
+
+### Fase 10 — Colisión sprite↔tile sólido ✅ COMPLETADA (punto = centro)
+
+**Objetivo:** que el hardware detecte cuándo un sprite entra en una celda “sólida”.
+
+**Diseño:**
+- **Bit 4 del byte de atributo** del fondo = `SOLIDO`.
+- Una vez por frame (durante el **blanking vertical**), el hardware recorre los
+  **32 sprites**, calcula la celda del **centro** de cada uno (`(sx+4)/8`, `(sy+4)/8`)
+  y lee el bit 4 de su atributo.
+- **Resultado global:** bit 5 de `$D803` (`SOLID_HIT`) = 1 si cualquier sprite tocó
+  un tile sólido ese frame (no sticky; se recalcula cada frame).
+
+**Coste real:** 4.729 → 5.163 LUTs (**+434 LUTs**). **BSRAM: 0.**
+
+> **Nota:** el puerto B de atributos se multiplexa (`attr_rd_addr`): la celda del
+> fondo el resto del tiempo, la celda del sprite durante el barrido de colisión.
+> El flag se lee con 1 frame de latencia respecto a la posición (normal en juegos).
+
+**Pendiente (opción):** punto de colisión **configurable por sprite** (pie/cabeza/
+centro) — requeriría ampliar el OAM a 5 bytes por sprite. Por ahora, **punto fijo
+= centro**.
 
 ---
 
@@ -543,11 +574,15 @@ y sustituirlas por las reales de §3.1.
 | Fase | Contenido | LUTs acumuladas | BSRAM | Riesgo |
 |------|-----------|-----------------|-------|--------|
 | **8** | **Split de raster (3 bandas)** | **4.699 (real)** | **26/26** | **Bajo** ✅ |
-| **9** | **Escalado 2× de sprites** | **~4.780–4.900** | **26/26** | **Bajo-medio** |
-| — | Colisiones por hardware | +600–900 LUT | 26/26 | Medio (no cabe completo) |
+| **9** | **Escalado 2× de sprites** | **4.729 (real)** | **26/26** | **Bajo** ✅ |
+| **10** | **Colisión sprite↔tile sólido (centro)** | **5.163 (real)** | **26/26** | **Bajo** ✅ |
+| — | Colisión sprite↔sprite (contra 1-2 objetivos) | +900–1.900 LUT | 26/26 | Medio |
 | — | OAM 32→64 sprites | +600–900 LUT | 26/26 | Medio |
 | — | Line buffer 8→16 | +500–600 LUT | 26/26 | Medio |
+| — | Punto de colisión configurable (OAM 5 bytes) | +50-100 LUT | 26/26 | Bajo |
 | A | **Análisis del modo bitmap (al final)** | **ver `05-ANALISIS-BITMAP.md`** | **repartir BSRAM** | **Alto** |
+
+**Margen actual: ~3.477 LUTs (40%).**
 
 > Las estimaciones se han rebajado tras medir que el motor de tiles cuesta solo +42 LUTs
 > (la mayor parte del coste ya estaba en el pipeline de la Fase 2).
@@ -572,12 +607,13 @@ El plan puede detenerse en cualquier fase con un sistema funcional:
 | **Tras fase 6** | **Juegos con scroll** (H/V) ✅ |
 | Tras fase 7 | Juegos con scroll + consola de texto ✅ |
 | **Tras fase 8** | **Juegos con HUD fijo y parallax** (split de raster) ✅ |
-| Tras fase 9 | Sistema de juegos + sprites escalados 2× |
+| **Tras fase 9** | Sistema de juegos + sprites escalados 2× ✅ |
+| **Tras fase 10** | **Sistema de juegos con colisión contra tiles** (plataformas) ✅ |
 | (Análisis A) | Sistema de juegos + herramientas de dibujo (bitmap) |
 
 **El objetivo mínimo viable es la fase 5.** A partir de ahí ya se pueden desarrollar
-juegos reales. Las fases 6–9 añaden capacidades de juego (scroll, texto, split de
-raster, escalado).
+juegos reales. Las fases 6–10 añaden capacidades de juego (scroll, texto, split de
+raster, escalado, colisión).
 
 ---
 
