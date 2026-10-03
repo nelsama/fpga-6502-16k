@@ -120,7 +120,7 @@ architecture rtl of video_bus is
     signal sc_x_hi_r   : std_logic_vector(2 downto 0) := (others => '0');
     signal sc_y_lo_r   : std_logic_vector(7 downto 0) := (others => '0');
     signal sc_y_hi_r   : std_logic_vector(2 downto 0) := (others => '0');
-    signal sc_stride_r : std_logic_vector(7 downto 0) := x"28";
+    signal sc_stride_r : std_logic_vector(7 downto 0) := x"40";
 
     -- Split de raster ($D809-$D812)
     signal raster_line0_r : std_logic_vector(7 downto 0) := x"FF";  -- banda top
@@ -158,7 +158,7 @@ begin
                 sc_x_hi_r   <= (others => '0');
                 sc_y_lo_r   <= (others => '0');
                 sc_y_hi_r   <= (others => '0');
-                sc_stride_r <= x"28";
+                sc_stride_r <= x"40";
                 raster_line0_r <= x"FF";
                 b2x_lo_r <= (others => '0');
                 b2x_hi_r <= (others => '0');

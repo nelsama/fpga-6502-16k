@@ -405,8 +405,8 @@ El sistema de sprites costó ~+800 LUTs y +1 bloque BSRAM (banco de patrones de 
 | Registros de scroll X/Y (`$D804`–`$D807`) | ✅ |
 | `x0_world = x0_log + scroll_x` / `y0_world = y0_log + scroll_y` | ✅ |
 | Captura del scroll al inicio de frame | ✅ |
-| Envoltura horizontal (`x_cell mod 40`) | ✅ |
-| Envoltura vertical (`y_cell mod 30`) | ✅ |
+| Envoltura horizontal (`x_cell mod 64`) | ✅ |
+| Envoltura vertical (`y_cell mod 32`) | ✅ |
 | **Split de raster (scroll por línea)** | ⏳ **movido a Fase 8** |
 | Tilemap doble (sin tearing en mapa grande) | ⏳ opcional, requiere BSRAM |
 
@@ -642,7 +642,7 @@ H/V, split de raster con HUD fijo arriba/abajo).
 
 1. **Fase 9 — Escalado 2× de sprites** — sin rotación (descartada).
 2. **Colisiones** sprite-sprite / sprite-tile (por software o hardware parcial).
-3. **Mapa 40×50** para shooters verticales (`mod 30`→`mod 50`).
+3. **Mapa más alto/ancho** — ✅ mapa 64×32 con stride 64 (scroll H y V sobre mundo mayor que la pantalla).
 4. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
 5. **Cursor / scroll de texto** — rutina de consola en software.
 6. **Integración con el monitor** — cargar juegos de SD a RAM.

@@ -255,7 +255,7 @@ Comparación: NES = 25, C64 = 16, Master System = 32.
 | `$D805` | `SCROLL_X_HI` | W | Scroll X, byte alto (bits 2:0) |
 | `$D806` | `SCROLL_Y_LO` | W | Scroll Y (banda media), byte bajo |
 | `$D807` | `SCROLL_Y_HI` | W | Scroll Y, byte alto (bits 2:0) |
-| `$D808` | `MAP_STRIDE` | W | Ancho del mapa en celdas (por defecto 40) |
+| `$D808` | `MAP_STRIDE` | W | Ancho del mapa en celdas (por defecto **64**) |
 
 ### 5.3 Registros de split de raster (Fase 8, IMPLEMENTADOS)
 
@@ -315,8 +315,8 @@ Arreglos BSRAM direccionados por separado. La VRAM son **6 bloques**:
 
 | Arreglo | Tamaño del arreglo | Posiciones usadas | BSRAM |
 |---------|--------------------|-------------------|-------|
-| Tilemap | 2048×8 | 1200 (40×30) | 1 |
-| Atributos | 2048×8 | 1200 (40×30) | 1 |
+| Tilemap | 2048×8 | 2048 (64×32) | 1 |
+| Atributos | 2048×8 | 2048 (64×32) | 1 |
 | Patrones de fondo | 2048×16 | 1536 + 768 (fuente) | 2 |
 | Patrones de sprite | 128×16 | 512 (64×8) | 1 |
 | **Fuente (`font_arr`)** | **1024×9** | **768 (96×8), 1bpp** | **1** |
@@ -340,12 +340,24 @@ Ver [`04-MODO-TEXTO.md`](04-MODO-TEXTO.md).
 
 ### 6.1 Direccionamiento interno del motor
 
+El mapa es de **64×32 celdas** (2.048, el máximo de `tile_arr`), mayor que la
+pantalla visible (40×30). Esto habilita **scroll horizontal y vertical** sobre
+contenido extra. El stride 64 es **potencia de 2**, así que `y_cell * 64` es una
+concatenación de bits (sin multiplicador, ~0 LUTs).
+
 ```
-cell_addr = y_cell * 40 + x_cell          (0..1199)   -> tilemap y atributos
+cell_addr = (y_cell(4:0) & x_cell(5:0))    (0..2047)   -> tilemap y atributos (mapa 64x32)
+              con x_cell = (x_world/8) mod 64
+                  y_cell = (y_world/8) mod 32
 pat_addr  = tile * 8 + fila                (0..1535)   -> patrón de FONDO (16 bits)
 spr_addr  = sprite * 8 + fila              (0..511)    -> patrón de SPRITE (16 bits)
 oam_byte = sprite * 4 + campo              (0..127)    -> X, Y, TILE, FLAGS
 ```
+
+> **Ojo con el mundo vacío:** al ser el mapa más grande que la pantalla, el
+> software debe **rellenar todas las celdas** (64×32) que pueda alcanzar el scroll.
+> Las columnas 40–63 y las filas 30–31 también se muestran al desplazarse; si
+> quedan sin escribir, aparece basura de la init.
 
 ### 6.2 Distribución de una palabra de patrón (16 bits)
 

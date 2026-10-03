@@ -123,12 +123,12 @@ architecture rtl of video_core is
     -- ========================================================================
     signal scroll_x   : unsigned(10 downto 0) := (others => '0');
     signal scroll_y   : unsigned(10 downto 0) := (others => '0');
-    signal map_stride : unsigned(7 downto 0) := to_unsigned(40, 8);
+    signal map_stride : unsigned(7 downto 0) := to_unsigned(64, 8);
 
     -- sincronizacion de los registros de scroll (clk_sys -> clk_pixel)
     signal scx_s1, scx_s2 : std_logic_vector(10 downto 0) := (others => '0');
     signal scy_s1, scy_s2 : std_logic_vector(10 downto 0) := (others => '0');
-    signal scs_s1, scs_s2 : std_logic_vector(7 downto 0) := x"28";
+    signal scs_s1, scs_s2 : std_logic_vector(7 downto 0) := x"40";
 
     -- split de raster (sincronizado)
     signal rl0_s1, rl0_s2 : std_logic_vector(7 downto 0) := x"FF";
@@ -521,14 +521,15 @@ begin
 
     -- ========================================================================
     -- DIRECCION DE CELDA (combinacional) -> tilemap y atributos
-    --   cell_addr = (y_world/8 mod 30) * 40 + (x_world/8 mod 40)   [mod 2048]
-    --   Tanto x_cell como y_cell envuelven dentro del mapa (40x30) para que
-    --   el scroll NO se cuele en la fila/columna siguiente (wrap espurio).
-    --   Permite scroll horizontal y vertical con envoltura limpia.
+    --   MAPA 64x32 (stride 64, potencia de 2 -> multiplicacion = shift, ~0 LUTs)
+    --   cell_addr = (y_world/8 mod 32) * 64 + (x_world/8 mod 64)
+    --             = (y_cell & x_cell)     (5 bits & 6 bits = 11 bits, 2048 celdas)
+    --   El mapa es mas grande que la pantalla (40x30), habilitando scroll
+    --   horizontal Y vertical por contenido extra (shooters H y V).
     -- ========================================================================
-    x_cell    <= x0_world(10 downto 3) mod 40;
-    y_cell    <= y0_world(10 downto 3) mod 30;
-    cell_addr <= resize(y_cell * to_unsigned(40, 6), 11) + resize(x_cell, 11);
+    x_cell    <= x0_world(10 downto 3) mod 64;
+    y_cell    <= y0_world(10 downto 3) mod 32;
+    cell_addr <= y_cell(4 downto 0) & x_cell(5 downto 0);
 
     -- ========================================================================
     -- PIPELINE ETAPA 1

@@ -92,7 +92,8 @@ wait_ready:
     STA $D812
 
     ; ============================================
-    ; 1) TERRENO: filas 22..29
+    ; 1) TERRENO: filas 22..31 (mapa completo 64 ancho)
+    ;    fila 22 = cesped, filas 23..31 = tierra texturizada
     ; ============================================
     LDA #22
     STA ROW
@@ -130,15 +131,41 @@ do_put:
     JSR put_cell
     INC COL
     LDA COL
-    CMP #40
+    CMP #64
     BNE ground_col
     INC ROW
     LDA ROW
-    CMP #30
+    CMP #32
     BNE ground_loop
 
     ; ============================================
-    ; 2) ARBOLES: columnas 5, 15, 25, 35
+    ; 2) CIELO: filas 3..21 en TODO el ancho (64)
+    ;    (deja el fondo azul limpio; antes quedaba a 0 y el
+    ;     scroll horizontal revelaba celdas sin escribir)
+    ; ============================================
+    LDA #3
+    STA ROW
+sky_loop:
+    LDA #0
+    STA COL
+sky_col:
+    JSR calc_cell
+    LDA #$20            ; espacio = celda transparente (BG azul)
+    STA TILE
+    LDA #$00
+    STA PAL
+    JSR put_cell
+    INC COL
+    LDA COL
+    CMP #64
+    BNE sky_col
+    INC ROW
+    LDA ROW
+    CMP #22
+    BNE sky_loop
+
+    ; ============================================
+    ; 2b) ARBOLES: columnas repartidas por las 64 del mapa
     ; ============================================
     LDA #0
     STA I
@@ -176,7 +203,7 @@ tree_loop:
 
     INC I
     LDA I
-    CMP #4
+    CMP #8
     BNE tree_loop
 
     ; ============================================
@@ -210,8 +237,27 @@ cloud_loop:
     JSR put_cell
     INC I
     LDA I
-    CMP #4
+    CMP #8
     BNE cloud_loop
+
+    ; ============================================
+    ; 3b) FILA 0 (margen del HUD superior): cielo limpio en todo el ancho
+    ; ============================================
+    LDA #0
+    STA ROW
+    LDA #0
+    STA COL
+fila0_loop:
+    JSR calc_cell
+    LDA #$20            ; espacio = transparente (BG azul)
+    STA TILE
+    LDA #$00
+    STA PAL
+    JSR put_cell
+    INC COL
+    LDA COL
+    CMP #64
+    BNE fila0_loop
 
     ; ============================================
     ; 4) HUD SUPERIOR FIJO: filas 1..2 (fila 0 reservada como margen)
@@ -352,33 +398,28 @@ put_cell:
     RTS
 
 ; ============================================
-; calc_cell: CUR = ROW*40 + COL
+; calc_cell: CUR = ROW*64 + COL   (mapa 64x32, stride potencia de 2)
+;   ROW*64 es un simple shift izquierdo de 6 bits.
 ; ============================================
 calc_cell:
     LDA ROW
     STA J
+    ; CUR_LO = (ROW<<6) & $FF  =  ROW & $03 << 6  (bits 0-1 de ROW -> bits 6-7)
     LDA J
+    AND #$03
+    ASL A
     ASL A
     ASL A
     ASL A
     ASL A
     ASL A
     STA CUR_LO
+    ; CUR_HI = ROW >> 2  (bits 2-7 de ROW -> bits 0-5 del byte alto)
     LDA J
-    LSR A
     LSR A
     LSR A
     STA CUR_HI
-    LDA J
-    ASL A
-    ASL A
-    ASL A
-    CLC
-    ADC CUR_LO
-    STA CUR_LO
-    BCC cc_n
-    INC CUR_HI
-cc_n:
+    ; + COL (las 40 columnas visibles; el resto del ancho 64 queda fuera de pantalla)
     LDA CUR_LO
     CLC
     ADC COL
@@ -389,9 +430,9 @@ cc_n2:
     RTS
 
 tree_cols:
-    .byte 5, 15, 25, 35
+    .byte 5, 15, 25, 35, 45, 55, 60, 10
 cloud_cols:
-    .byte 2, 12, 22, 32
+    .byte 2, 12, 22, 32, 42, 52, 58, 6
 
 ; "LIVES 03": L=$4C I=$49 V=$56 E=$45 S=$53 esp=$20 0=$30 3=$33
 hud_top_msg:
