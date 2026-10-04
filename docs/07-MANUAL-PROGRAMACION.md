@@ -448,25 +448,202 @@ No es un modo aparte: **el motor de tiles con una fuente cargada como patrones**
 Escribes el **código ASCII** como índice de tile en el tilemap.
 
 - Fuente: charset del C64 (96 caracteres, `$20`-`$7F`), 8×8, 1bpp expandido a 2bpp.
-- `tile = ASCII` → aparece el glifo.
-- Usa la **paleta 0** del fondo (color 3 = tinta).
+- **`tile = ASCII`** → aparece el glifo (el hardware ya hizo el remapeo del C64).
+- Usa la **paleta 0** del fondo (color 3 = tinta = blanco).
+- **Rango útil:** `$20` (espacio) a `$7F`. Mayúsculas `$41-$5A`, minúsculas `$61-$7A`
+  (están remapeadas internamente), dígitos `$30-$39`, signos `$21-$3F`.
+
+> **Reserva de tiles:** la fuente ocupa `$20`-`$7F`. Los tiles `$00`-`$1F` quedan
+> libres para gráficos propios. En un juego real defines tu propio tileset **y** la
+> fuente en rangos que no choquen.
+
+### 9.1 La rejilla de texto
+
+El texto vive en el **tilemap** (64×32 celdas). Una pantalla de texto usa las
+40 columnas visibles × 30 filas. La **celda del cursor** se calcula igual que
+cualquier celda:
+
+```
+celda = fila * 64 + columna
+```
+
+### 9.2 Variables de la consola (zero page sugeridas)
+
+```
+CX = $40        ; columna del cursor (0..39)
+CY = $41        ; fila del cursor (0..29)
+CTMP = $42      ; temporal
+```
+
+### 9.3 `put_xy`: escribir un carácter en una posición
 
 ```asm
-; put_char: escribe el caracter A en la celda (CUR_LO/CUR_HI)
-put_char:
-    STA TMP
-    LDA CUR_LO
-    STA $D800
-    LDA CUR_HI
-    STA $D801              ; area 00 = tilemap
-    LDA TMP
-    STA $D802
+; A = caracter ASCII, CX = columna, CY = fila
+put_xy:
+    STA CTMP
+    ; celda = CY*64 + CX  (stride 64 = shift)
+    LDA CY
+    LSR A : LSR A : STA $18      ; celda_hi = CY >> 2
+    LDA CY
+    AND #$03
+    ASL A : ASL A : ASL A : ASL A : ASL A : ASL A
+    ORA CX                        ; | CX (0..39, cabe en 6 bits)
+    STA $17                       ; celda_lo
+    ; escribir en el tilemap (area 00)
+    LDA $17 : STA $D800
+    LDA $18 : STA $D801
+    LDA CTMP : STA $D802          ; tile = ASCII -> glifo
     RTS
 ```
 
-> **Reserva de tiles:** la fuente ocupa `$20`-`$7F`. Los tiles `$00`-`$1F` quedan
-> para gráficos propios... **ojo**: los tiles gráficos de la init de la demo usan
-> `$00`-`$07`. En un juego real defines tu propio tileset.
+### 9.4 `put_char`: carácter en el cursor y avanzar
+
+```asm
+; A = caracter ASCII. Avanza el cursor; al final de linea, salta.
+put_char:
+    CMP #$0D               ; CR = fin de linea
+    BEQ .cr
+    PHA
+    LDA CX                 ; posicion actual
+    ; (usar put_xy con CX/CY)
+    PLA
+    JSR put_xy
+    ; avanzar columna
+    INC CX
+    LDA CX
+    CMP #40                ; 40 columnas
+    BCC .fin
+    LDA #0 : STA CX        ; nueva linea
+    INC CY
+.fin:
+    RTS
+.cr:
+    LDA #0 : STA CX
+    INC CY
+    RTS
+```
+
+### 9.5 `put_str`: imprimir una cadena
+
+```asm
+; X = indice en la cadena (terminada en 0)
+put_str:
+    LDA cadena,X
+    BEQ .fin
+    JSR put_char
+    INX
+    JMP put_str
+.fin:
+    RTS
+```
+
+### 9.6 Borrar pantalla (llenar con espacios)
+
+```asm
+; Rellena las 40x30 celdas visibles con espacio ($20)
+clear_screen:
+    LDA #0
+    STA $17               ; celda_lo = 0
+    LDA #0
+    STA $18               ; celda_hi = 0
+clr_loop:
+    LDA #$20              ; espacio
+    STA $D802             ; (addr ya apunta a la celda)
+    ; avanzar direccion
+    INC $17
+    BNE clr_n
+    INC $18
+clr_n:
+    ; 40*30 = 1200 -> fin cuando celda = 1200 ($4B0)
+    ; (comparar $18:$17 con $04:$B0)
+    LDA $18
+    CMP #$04
+    BCC clr_again
+    LDA $17
+    CMP #$B0
+    BCC clr_again
+    RTS
+clr_again:
+    ; reescribir la direccion y repetir
+    LDA $17 : STA $D800
+    LDA $18 : STA $D801
+    JMP clr_loop
+```
+
+> **Nota:** el puerto indirecto no auto-incrementa; hay que reescribir `$D800/$D801`
+> antes de cada `$D802`. El ejemplo lo hace en cada iteración.
+
+### 9.7 Scroll de texto (subir una línea)
+
+Cuando el cursor pasa de la última fila, desplaza todo el texto una fila hacia
+arriba y deja la última línea en blanco. Se hace **copiando el tilemap** desde RAM
+(o releyendo si tuvieras lectura de VRAM; hoy se mantiene **una copia en RAM**):
+
+```asm
+; Idea: el juego mantiene el texto en una RAM de 40x30 (1200 bytes).
+; scroll_text: copia fila N+1 sobre fila N (N=0..28), y limpia la fila 29.
+; Luego reescribe las celdas de VRAM que cambiaron (o toda la pantalla).
+```
+
+> **Recomendación:** como el **CPU no puede leer la VRAM** (el puerto es solo de
+> escritura), la consola mantiene su propia **copia del texto en RAM** (1200 B) y
+> la vuelca a la VRAM por bloques. Es lo estándar.
+
+### 9.8 HUD de texto con split de raster
+
+Para un marcador **fijo** (score, vidas) sobre el juego, usa el **split de raster**
+(§8): reserva una banda (p. ej. la superior) con **scroll 0** y escribe el texto en
+las filas del tilemap que caen en esa banda. El texto queda fijo mientras el juego
+scrollea.
+
+```asm
+; banda superior de 3 filas (raster_line0 = 24): filas 1-2 para el HUD
+; escribir "SCORE 000000" en la fila 1, columnas 2..
+```
+
+### 9.9 Ejemplo completo: pantalla de título
+
+```asm
+start_text:
+    JSR clear_screen
+    LDA #10 : STA CX       ; columna 10
+    LDA #5  : STA CY       ; fila 5
+    LDX #0
+    JSR put_str_title
+    RTS
+
+title:  .byte "MI JUEGO", $0D
+        .byte "PULSA FIRE", 0
+```
+
+### 9.10 Colores del texto
+
+El color lo da la **paleta de la celda** (bits 1:0 de `attr_arr`), no el tilemap.
+Para cambiar el color de un texto, escribe el **atributo** de la celda:
+
+```asm
+; poner el texto de la celda (CX,CY) en paleta P (0..3)
+; (usar la misma celda; area 01 = atributos)
+    ; celda = CY*64 + CX  -> $17/$18
+    LDA $17 : STA $D800
+    LDA $18 : STA $D801    ; OJO: aqui area 00; para atributo, ORA #$40 en $18
+    ; ... ver put_attr del manual §5.3
+```
+
+### 9.11 Resumen de la fuente
+
+| Rango ASCII | Contenido |
+|-------------|-----------|
+| `$20` | espacio |
+| `$21`-`$2F` | signos (`!"#$%&'()*+,-./`) |
+| `$30`-`$39` | dígitos `0`-`9` |
+| `$3A`-`$40` | signos (`:;<=>?@`) |
+| `$41`-`$5A` | mayúsculas `A`-`Z` |
+| `$5B`-`$60` | signos (`[\]^_` + backtick) |
+| `$61`-`$7A` | minúsculas `a`-`z` |
+| `$7B`-`$7F` | `{|}~` (algunos en blanco) |
+
+> `CR` (`$0D`) se usa como **fin de línea** en las rutinas de consola (no es un glifo).
 
 ---
 
@@ -666,20 +843,16 @@ cuadrantes (no +8).
 
 ### 12.5 Escribir texto
 
+Ver la **sección 9** para la librería de consola completa (`put_xy`, `put_char`,
+`put_str`, `clear_screen`, scroll). Resumen mínimo:
+
 ```asm
-; Imprime "HOLA" en la fila ROW, col COL (usa tiles = ASCII)
-    LDA #ROW
-    STA TROW
-    LDA #COL
-    STA TCOL
+; Imprime "HOLA" en la fila CY, col CX (tile = ASCII)
     LDX #0
 txt_loop:
     LDA msg,X
     BEQ txt_done
-    JSR calc_cell          ; usa TROW/TCOL
-    LDA msg,X
-    JSR put_char
-    INC TCOL
+    JSR put_char           ; usa CX/CY; ver §9.4
     INX
     JMP txt_loop
 txt_done:
