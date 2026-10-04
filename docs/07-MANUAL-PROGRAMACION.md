@@ -31,6 +31,7 @@ Si el hardware cambia, anota aquí la versión del manual correspondiente.
 12. [Recetas completas](#12-recetas-completas)
 13. [Limitaciones y buenas prácticas](#13-limitaciones-y-buenas-prácticas)
 14. [Esqueleto de juego](#14-esqueleto-de-juego)
+15. [Apéndice A — Chuletas de referencia](#apéndice-a--chuletas-de-referencia)
 
 ---
 
@@ -170,19 +171,24 @@ Cada píxel es **2 bpp** → índice de color **0-3** dentro de la paleta de su 
 ### 4.1 Paletas de FONDO (4 paletas × 4 colores)
 
 El **atributo de la celda usa los bits 1:0** para seleccionar una de las 4 paletas
-(los bits 3:2 del atributo están reservados / no se usan). El índice final en la
-tabla de paletas es la **concatenación** `paleta(1:0 del atributo) & color(1:0 del patrón)`
-(4 bits → índice 0-15):
+(los bits 3:2 del atributo están reservados / no se usan). El índice final (0-15) se
+forma con la **paleta en los bits altos** y el **color en los bajos**:
+
+```
+índice = (paleta << 2) | color          ; paleta 0-3, color 0-3
+```
 
 | Paleta | color0 | color1 | color2 | color3 | Uso |
 |--------|--------|--------|--------|--------|-----|
-| 0 | negro | azul (`$00A`) | cian (`$0CF`) | blanco | texto / cielo |
-| 1 | negro | marrón (`$A62`) | gris (`$AAA`) | blanco | terreno |
-| 2 | negro | verde (`$0A0`) | verde oscuro (`$060`) | verde | vegetación |
-| 3 | negro | gris (`$888`) | marrón (`$840`) | verde | texto verde |
+| 0 | (transparente) | azul (`$00A`) | cian (`$0CF`) | blanco | texto / cielo |
+| 1 | (transparente) | marrón (`$A62`) | gris (`$AAA`) | blanco | terreno |
+| 2 | (transparente) | verde (`$0A0`) | verde oscuro (`$060`) | verde | vegetación |
+| 3 | (transparente) | gris (`$888`) | marrón (`$840`) | verde | texto verde |
 
-**Color 0 del fondo = transparente** (se ve `BG_COLOR`). El **color 3** es el que usa
-la fuente de texto.
+> **El color 0 del fondo es SIEMPRE transparente**: donde el patrón tiene color 0 no
+> se pinta fondo y se ve `BG_COLOR` (o un sprite que esté detrás). Por eso la columna
+> "color0" es transparente, no negro. El **color 3** es el que usa la fuente de texto.
+> Para "pintar negro" de verdad, usa `BG_COLOR` negro o un color 1-3 de alguna paleta.
 
 ### 4.2 Paletas de SPRITE (4 paletas × 4 colores, banco aparte)
 
@@ -193,7 +199,11 @@ la fuente de texto.
 | 2 | **transparente** | magenta (`$F0F`) | rojo (`$F00`) | blanco |
 | 3 | **transparente** | verde (`$0F0`) | naranja (`$F80`) | blanco |
 
-Se selecciona con los bits 3:0 de FLAGS del sprite (se usan 1:0 → 4 paletas).
+Se selecciona con los **bits 1:0** de FLAGS del sprite (4 paletas; los bits 3:2 de
+FLAGS están reservados). El índice se forma igual que en el fondo:
+`índice = (paleta << 2) | color`. Recuerda que el **color 0 del sprite también es
+ transparente** (nunca se ve la columna "transparente"): donde el patrón del sprite
+tiene color 0, se ve lo que haya detrás (fondo o `BG_COLOR`).
 
 ### 4.3 Color de fondo global (`BG_COLOR`)
 
@@ -252,8 +262,11 @@ cc_done:
 ### 5.3 Escribir el atributo de una celda
 
 ```asm
-; Atributo: bit7 PRIO | bit6 FLIP_Y | bit5 FLIP_X | bit4 SOLIDO | bits3:0 PALETA
-put_attr:                  ; A = valor del atributo
+; put_attr: escribe el atributo de la celda ya calculada.
+; Entrada: A = valor del atributo
+;          CUR_LO/CUR_HI = celda (fila*64+col), p. ej. tras JSR calc_cell
+; Atributo: bit7 PRIO | bit6 FLIP_Y | bit5 FLIP_X | bit4 SOLIDO | bits1:0 PALETA
+put_attr:
     PHA
     LDA CUR_LO
     STA $D800
@@ -264,6 +277,9 @@ put_attr:                  ; A = valor del atributo
     STA $D802
     RTS
 ```
+
+> **Ojo:** `put_attr` **no** calcula la celda. Debes llamar antes a `calc_cell`
+> (o tener `CUR_LO/CUR_HI` ya puestos) para la celda correcta.
 
 ### 5.4 Cargar un patrón de tile (2 planos)
 
@@ -355,61 +371,64 @@ Ejemplos:
 
 ### 6.2 Escribir un campo del OAM
 
+El byte de un campo del sprite `SPR` está en `SPR*5 + FIELD`. Para multiplicar por 5
+sin instrucción de multiplicar, mantén una tabla `SPR_BASE` en ROM con
+`[0, 5, 10, 15, ..., 155]` y usa `LDA SPR_BASE,X` (una entrada por sprite).
+
 ```asm
-; Escribe DATA en el campo FIELD del sprite SPR.
-; Entrada: SPR (0-31), FIELD (0-4), DATA
+; oam_put: escribe DATA en el campo FIELD del sprite SPR.
+; Entrada: A = DATA, X = SPR (0-31), Y = FIELD (0-4)
+; Requiere: tabla SPR_BASE con SPR*5 para cada sprite.
 oam_put:
-    ; byte = SPR*5 + FIELD   -> usar tabla o multiplicación por 5
-    LDA SPR
+    PHA                    ; guardar DATA
+    LDA SPR_BASE,X         ; byte base = SPR*5
     STA BIDX
-    ASL A                  ; *2
+    TYA                    ; FIELD
     CLC
-    ADC BIDX               ; *3
-    CLC
-    ADC BIDX               ; no... ver nota
-    ; (Sencillo: 5 = 4+1)
-    RTS
-```
-
-**Forma recomendada** (sin multiplicar): mantén una tabla `SPR_BASE` en ROM con
-`[0,5,10,15,...,155]` y usa `LDA SPR_BASE,X`.
-
-```asm
-oam_put:                   ; A = DATA, X = SPR, Y = FIELD
-    PHA
-    LDA SPR_BASE,X
+    ADC BIDX               ; byte = SPR*5 + FIELD
     STA BIDX
-    TYA
-    CLC
-    ADC BIDX
-    STA BIDX               ; byte = base[spr] + field
-    LDA #$C0               ; area 11, bit3=0 -> OAM
-    STA $D801
     LDA BIDX
-    STA $D800
-    PLA
-    STA $D802
+    STA $D800              ; direccion baja = byte del OAM
+    LDA #$C0               ; area 11, bit3=0 -> OAM; dir alta = 0
+    STA $D801
+    PLA                    ; recuperar DATA
+    STA $D802              ; dispara la escritura
     RTS
 ```
+
+> El OAM tiene 160 bytes (32 sprites × 5). Todos caben en `$D800` con la dirección
+> alta en 0, por eso `$D801` es siempre `$C0`.
 
 ### 6.3 Definir un sprite completo (helper de juego)
 
 ```asm
-; sprite_put: (XSPR, YSPR, TILE, FLAGS, COLL) para el sprite SPR
-;   Escribe los 5 campos. Usar dentro del VBLANK.
+; sprite_put: escribe los 5 campos del sprite SPR de una vez.
+; Entrada: XSPR, YSPR, TILE, FLAGS, COLL = valores de los 5 campos
+;          SPR = indice del sprite (0-31)
+; Usar dentro del VBLANK.
 sprite_put:
-    LDA #0
-    JSR oam_put            ; +0 X  (X=SPR, Y=0)
-    LDA #1
-    JSR oam_put            ; +1 Y
-    LDA #2
-    JSR oam_put            ; +2 TILE
-    LDA #3
-    JSR oam_put            ; +3 FLAGS
-    LDA #4
-    JSR oam_put            ; +4 COLL_POINT
+    LDX SPR                ; indice de sprite para oam_put
+    LDA XSPR
+    LDY #0                 ; campo 0 = X
+    JSR oam_put
+    LDA YSPR
+    LDY #1                 ; campo 1 = Y
+    JSR oam_put
+    LDA TILE
+    LDY #2                 ; campo 2 = TILE
+    JSR oam_put
+    LDA FLAGS
+    LDY #3                 ; campo 3 = FLAGS (paleta, flips, PRIO, X_bit8)
+    JSR oam_put
+    LDA COLL
+    LDY #4                 ; campo 4 = COLL_POINT
+    JSR oam_put
     RTS
 ```
+
+> `oam_put` espera: **A = dato**, **X = sprite**, **Y = campo**. `sprite_put` toma
+> los datos de sus variables y los pasa uno a uno. El sprite queda **completo**
+> (los 5 campos); los sprites no usados deben llevar **Y ≥ 248** para deshabilitarse.
 
 ---
 
@@ -459,16 +478,33 @@ Ideal para **HUD fijo** arriba y/o abajo.
 | Dir | Registro | Significado |
 |-----|----------|-------------|
 | `$D809` | `RASTER_LINE0` | **Primera línea (en píxeles) NO incluida en la banda superior.** `$FF` = sin banda superior |
-| `$D80A/$D80B` | `BAND2_X` | Scroll de la banda superior |
-| `$D80C/$D80D` | `BAND2_Y` | Scroll Y de la banda superior |
+| `$D80A/$D80B` | `BAND2_X` lo/hi | Scroll X de la banda superior |
+| `$D80C/$D80D` | `BAND2_Y` lo/hi | Scroll Y de la banda superior |
 | `$D80E` | `RASTER_LINE1` | **Primera línea (en píxeles) NO incluida en la banda media.** `$FF` = sin banda inferior |
-| `$D80F/$D810` | `BAND3_X` | Scroll de la banda inferior |
-| `$D811/$D812` | `BAND3_Y` | Scroll Y de la banda inferior |
+| `$D80F/$D810` | `BAND3_X` lo/hi | Scroll X de la banda inferior |
+| `$D811/$D812` | `BAND3_Y` lo/hi | Scroll Y de la banda inferior |
 
 - `RASTER_LINE0`/`RASTER_LINE1` están en **píxeles** (0-239), no en filas de tile.
 - **Banda superior** = líneas `0 .. RASTER_LINE0-1` → usa `BAND2_*`.
 - **Banda media** = líneas `RASTER_LINE0 .. RASTER_LINE1-1` → usa scroll normal (`$D804`).
 - **Banda inferior** = líneas `RASTER_LINE1 .. 239` → usa `BAND3_*`.
+
+**`BAND2_X`/`BAND3_X`/`_Y` funcionan igual que el scroll global** `$D804/$D805`
+(bits 2:0 en el registro `_HI`), pero recuerda que **BAND2_X lo/hi ocupan `$D80A`/`$D80B`**
+y **BAND3_X lo/hi ocupan `$D80F`/`$D810`** (ver la tabla de registros de §2.1).
+
+**¿Qué pasa si desactivas una banda (`$FF`)?** Hay 4 casos:
+
+| `RASTER_LINE0` | `RASTER_LINE1` | Resultado |
+|----------------|----------------|-----------|
+| `$FF` | `$FF` | Toda la pantalla usa el **scroll global** (`$D804`). Nada de bandas |
+| valor | `$FF` | Arriba `BAND2_*`, el resto **scroll global** (no hay banda inferior) |
+| `$FF` | valor | Arriba+medio **scroll global**, abajo `BAND3_*` (no hay banda superior) |
+| valor | valor | Arriba `BAND2_*`, medio **scroll global**, abajo `BAND3_*` |
+
+> Es decir: la **banda media siempre existe** y usa el scroll global. Si desactivas
+> la superior, la media empieza desde la línea 0. Si desactivas la inferior, la media
+> llega hasta abajo. `BAND2_*` solo se usa si `RASTER_LINE0` no es `$FF`.
 
 > El corte entre bandas ocurre en un **límite de fila de tile** (el valor de
 > `RASTER_LINE` se redondea hacia abajo a la fila de 8 píxeles correspondiente).
@@ -562,14 +598,11 @@ put_xy:
 
 ```asm
 ; A = caracter ASCII. Avanza el cursor; al final de linea, salta.
+; Usa CX/CY como posicion del cursor (ver §9.2).
 put_char:
     CMP #$0D               ; CR = fin de linea
     BEQ .cr
-    PHA
-    LDA CX                 ; posicion actual
-    ; (usar put_xy con CX/CY)
-    PLA
-    JSR put_xy
+    JSR put_xy             ; dibuja A en (CX,CY); put_xy conserva A
     ; avanzar columna
     INC CX
     LDA CX
@@ -601,36 +634,45 @@ put_str:
 
 ### 9.6 Borrar pantalla (llenar con espacios)
 
+La pantalla visible son 40 columnas × 30 filas, pero el mapa mide 64 de ancho. Por
+eso NO vale con rellenar 1200 celdas seguidas: hay que recorrer **fila por fila**
+(40 celdas en cada una) saltando el resto de la línea del mapa.
+
 ```asm
-; Rellena las 40x30 celdas visibles con espacio ($20)
+; Rellena las 40x30 celdas visibles con espacio ($20).
+;   celda(fila,col) = fila*64 + col
+;   $D800 = celda_lo = ((fila & 3) << 6) | col
+;   $D801 = celda_hi = fila >> 2          (area 00)
 clear_screen:
     LDA #0
-    STA $17               ; celda_lo = 0
-    LDA #0
-    STA $18               ; celda_hi = 0
-clr_loop:
+    STA $17               ; celda_lo = inicio de fila 0 (col 0)
+    STA $18               ; celda_hi = fila >> 2 (fila 0 -> 0)
+    LDX #30               ; 30 filas
+clr_row:
+    LDY #40               ; 40 columnas visibles
+clr_col:
+    LDA $17 : STA $D800   ; celda_lo = inicio de fila + col
+    LDA $18 : STA $D801   ; area 00 | (fila >> 2)
     LDA #$20              ; espacio
-    STA $D802             ; (addr ya apunta a la celda)
-    ; avanzar direccion
-    INC $17
-    BNE clr_n
+    STA $D802             ; dispara la escritura
+    INC $17               ; siguiente columna
+    DEY
+    BNE clr_col
+    ; siguiente fila: celda_lo avanza 64; si desborda, incrementa celda_hi
+    LDA $17 : CLC : ADC #64 : STA $17
+    BCC clr_n
     INC $18
 clr_n:
-    ; 40*30 = 1200 -> fin cuando celda = 1200 ($4B0)
-    ; (comparar $18:$17 con $04:$B0)
-    LDA $18
-    CMP #$04
-    BCC clr_again
-    LDA $17
-    CMP #$B0
-    BCC clr_again
+    DEX
+    BNE clr_row
     RTS
-clr_again:
-    ; reescribir la direccion y repetir
-    LDA $17 : STA $D800
-    LDA $18 : STA $D801
-    JMP clr_loop
 ```
+
+> **Cálculo de la dirección de celda:** la fila `f` empieza en `celda = f*64`.
+> Su byte bajo es `((f & 3) << 6)` y el bit alto (`f >> 2`) va en `$D801`.
+> Por eso al sumar 64 al byte bajo de la fila se incrementa el byte alto cuando
+> desborda. Alternativa más simple: recalcular ambos bytes desde `f` y `col` en cada
+> celda (como hace `put_xy`, §9.3).
 
 > **Nota:** el puerto indirecto no auto-incrementa; hay que reescribir `$D800/$D801`
 > antes de cada `$D802`. El ejemplo lo hace en cada iteración.
@@ -748,16 +790,22 @@ tilemap. Para cambiar el color de un texto, escribe el **atributo** de la celda:
   índices 0-15). La misma regla aplica a `dy`. Así **no tienes que saber la escala**:
   los mismos valores dan los mismos puntos lógicos.
 
-| Punto | Byte | 1× alcanza | 2× alcanza |
-|-------|------|-----------|-----------|
+| Punto | Byte | 1× alcanza (píxel) | 2× alcanza (píxel) |
+|-------|------|--------------------|--------------------|
 | centro | `$24` | 4 | 8 |
 | pie | `$3C` | 7 | 15 |
 | cabeza | `$04` | 0 | 0 |
 | borde izq | `$20` | 0 | 0 |
 | borde der | `$27` | 7 | 15 |
 
-> **Nota:** en 2× solo se alcanzan las posiciones **pares** + el borde (15). Es
-> suficiente para los puntos útiles (bordes, centro, pie, cabeza).
+> **En 1×** los índices son **píxeles** dentro del sprite 8×8: `dx=0` es el primer
+> píxel (columna 0) y `dx=7` es el **último píxel** (columna 7), no un punto fuera del
+> sprite. El rectángulo del sprite ocupa los píxeles 0-7.
+>
+> **En 2×** el sprite ocupa 16 px (0-15). Por eso `dx=7 → 15` es el **último píxel**
+> del sprite ampliado, y los valores intermedios dan posiciones **pares** (`dx*2`).
+> Al escribir siempre dx/dy en escala 0-7 obtienes el mismo punto lógico en ambas
+> escalas; el hardware hace la conversión.
 
 ### 10.4 Patrón de uso (varios sprites: deducción en software)
 
@@ -959,7 +1007,7 @@ inner_n:
 
 ### 12.4 Un objeto 16×16 a 2× (32×32)
 
-Igual que 6.3 pero cada sprite con `FLAGS |= $10` (SCALE2X) y **paso +16** entre
+Igual que 12.3 pero cada sprite con `FLAGS |= $10` (SCALE2X) y **paso +16** entre
 cuadrantes (no +8).
 
 ### 12.5 Escribir texto
@@ -1097,22 +1145,32 @@ update:
 
 (`$C8`/`$E8` = `$C0`/`$E0` con bit 3 = 1; la dirección alta del patrón va en bits 2:0.)
 
-### A.2 Atributo del fondo
+### A.2 Bits del atributo del fondo y FLAGS del sprite
+
+**Atributo del fondo** (un byte por celda, área `01`):
 
 ```
-bit7 PRIO | bit6 FLIP_Y | bit5 FLIP_X | bit4 SOLIDO | bits3:0 PALETA
+bit7 PRIO | bit6 FLIP_Y | bit5 FLIP_X | bit4 SOLIDO | bit3 rsv | bits1:0 PALETA
 ```
 
-**FLAGS del sprite**
+**FLAGS del sprite** (byte +3 del OAM):
 
 ```
-bit7 FLIP_Y | bit6 FLIP_X | bit5 PRIO | bit4 SCALE2X | bit2 X_bit8 | bits1:0 PALETA
+bit7 FLIP_Y | bit6 FLIP_X | bit5 PRIO | bit4 SCALE2X | bit3 rsv | bit2 X_bit8 | bits1:0 PALETA
+```
+
+### A.3 Índice de color
+
+```
+indice = (paleta << 2) | color           (paleta 0-3, color 0-3 -> 0-15)
 ```
 
 ### A.4 Fórmulas útiles
 
 ```
 celda      = y_tile*64 + x_tile          (tilemap/atributo)
+$D800      = celda & $FF
+$D801      = area | ((celda >> 8) & $07)
 dir_patron = tile*8 + fila               (patrón de fondo)
 dir_spr    = sprite*8 + fila             (patrón de sprite)
 byte_oam   = sprite*5 + campo            (campo 0..4)
@@ -1120,4 +1178,4 @@ byte_oam   = sprite*5 + campo            (campo 0..4)
 
 ---
 
-*Fin del manual. Para detalles de implementación interna, ver el resto de `docs/`.*
+*Fin del manual.*
