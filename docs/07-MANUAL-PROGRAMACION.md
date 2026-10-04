@@ -5,12 +5,13 @@
 **Modelo:** coprocesador gráfico estilo NES/VIC‑II (tiles + sprites, **sin framebuffer**)
 **Público:** programadores y asistentes de IA que escriban juegos en ensamblador 6502.
 
-> Este manual es **autocontenido**: con él puedes escribir un juego sin leer el VHDL.
-> Los ejemplos están en ensamblador (ca65 / cc65).
+> Este manual es **autocontenido**: describe el comportamiento del vídeo como una
+> **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
+> dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.0
-**Bitstream de referencia:** `impl/pnr/6502_board_v3.fs` (fases 1-12 del core de vídeo).
-Si recompilas el bitstream, anota aquí el hash para saber a qué hardware corresponde.
+**Versión del manual:** 2.1
+**Plataforma:** computador 6502 con el nuevo sistema de vídeo.
+Si el hardware cambia, anota aquí la versión del manual correspondiente.
 
 ---
 
@@ -35,25 +36,28 @@ Si recompilas el bitstream, anota aquí el hash para saber a qué hardware corre
 
 ## 1. Visión general y modelo mental
 
-El vídeo es un **coprocesador**. El CPU (6502) **no dibuja píxeles**: escribe
-**memoria de vídeo** (VRAM) y **registros**; el hardware genera la imagen solo.
+El vídeo funciona como un **coprocesador gráfico**. Tú (el programa) **no dibujas
+píxeles**: escribes **memoria de vídeo** (VRAM) y **registros**, y el vídeo se
+encarga de generar la imagen. Para ti es una caja negra: solo importan sus registros
+en `$D800`-`$D812` y la memoria de vídeo que llenas a través de ellos.
 
 Tres capas, de atrás a delante:
 
 ```
    ┌─────────────────────────────────────────┐
-   │ MARGEN (barra azul, 40 px a cada lado)   │  ← no dibujable
+   │ MARGEN (barra de color `BG_COLOR`)      │  ← no dibujable
    ├─────────────────────────────────────────┤
-   │ FONDO  (tiles 8×8 desde el tilemap)      │  ← capa 1
+   │ FONDO  (tiles 8×8 desde el tilemap)     │  ← capa 1
    ├─────────────────────────────────────────┤
-   │ SPRITES (8×8, con prioridad y transparencia) │ ← capa 2
+   │ SPRITES (8×8, con prioridad/transparencia) │ ← capa 2
    └─────────────────────────────────────────┘
 ```
 
 - **Pantalla visible:** 40×30 tiles = 320×240 píxeles lógicos.
 - **Mapa de fondo:** 64×32 celdas (más grande que la pantalla → scroll).
 - **Tiles:** 256 patrones de 8×8, 2 bpp (4 colores c/u).
-- **Sprites:** 32 en OAM, 8×8, 64 patrones, con flips, escala 2×, prioridad.
+- **Sprite:** 8×8 píxeles, con 64 dibujos (patrones) distintos, flips, escala 2×
+  y prioridad. Se controlan con la **OAM** (32 sprites).
 - **Color 0 de sprite** = transparente. **Color 0 del fondo** = transparente
   (se ve `BG_COLOR` o un sprite detrás).
 
@@ -152,11 +156,10 @@ Para un patrón de fondo (`area=10`, `tile=200`, `fila=3`): `D = 200*8+3 = 1603 
 > útil de tiles es **40×30 = 320×240 píxeles lógicos**, exactamente las 40 columnas
 > visibles; el margen está **fuera** de esos 320 px lógicos.
 
-> ⚠️ **Desfase de la fila 0:** por el pipeline, las **primeras líneas visibles**
-> muestran datos corridos de la fila 0 del tilemap. Por eso se reserva la **fila 0
-> como margen** y el contenido empieza en la **fila 1**. Esto afecta **solo al fondo**
-> (no a los sprites) y es el motivo por el que las demos usan `RASTER_LINE0=24`
-> (banda de 3 filas: fila 0 margen + filas 1-2 contenido).
+> ⚠️ **Desfase de la fila 0:** la **fila 0 del mapa** tiende a verse parcialmente
+> corrida. Es una peculiaridad del hardware que el programador no controla. Por eso
+> se reserva la **fila 0 como margen** y el contenido empieza en la **fila 1**. Esto
+> afecta **solo al fondo** (no a los sprites).
 
 ---
 
@@ -207,7 +210,9 @@ no hay sprite.
 - **Tilemap:** 64×32 celdas; cada celda guarda el **índice de patrón** (0-255).
 - **Atributos:** 64×32 bytes; cada uno = paleta + flips + PRIO + SÓLIDO de esa celda.
 
-El fondo se genera: por cada celda, leer `tilemap[celda]` → `pat_arr[tile]` → píxeles.
+El fondo se genera así: por cada celda se toma el **índice de patrón** guardado en el
+tilemap y con él se busca el **dibujo (patrón)** correspondiente, que es lo que se
+pinta en pantalla. El programador nunca ve ese proceso: solo escribe tilemap y patrones.
 
 ### 5.2 Escribir una celda (tilemap)
 
@@ -465,9 +470,10 @@ Ideal para **HUD fijo** arriba y/o abajo.
 - **Banda media** = líneas `RASTER_LINE0 .. RASTER_LINE1-1` → usa scroll normal (`$D804`).
 - **Banda inferior** = líneas `RASTER_LINE1 .. 239` → usa `BAND3_*`.
 
-> El **corte es por fila de tile**: internamente se compara `fila >= RASTER_LINE/8`.
-> Por eso conviene fijar `RASTER_LINE` en un múltiplo de 8. `$FF` (`255`) = banda
-> desactivada (`255/8 = 31`, por encima del rango visible).
+> El corte entre bandas ocurre en un **límite de fila de tile** (el valor de
+> `RASTER_LINE` se redondea hacia abajo a la fila de 8 píxeles correspondiente).
+> Por eso conviene fijar `RASTER_LINE` en un **múltiplo de 8**. `$FF` (`255`) = banda
+> desactivada.
 
 ### 8.2 Ejemplo: HUD fijo arriba y abajo, juego al medio
 
@@ -493,18 +499,20 @@ Ideal para **HUD fijo** arriba y/o abajo.
 
 ## 9. Modo texto
 
-No es un modo aparte: **el motor de tiles con una fuente cargada como patrones**.
-Escribes el **código ASCII** como índice de tile en el tilemap.
+No es un modo aparte: es **el mismo sistema de tiles, con una fuente cargada como
+dibujos**. Escribes el **código ASCII** como índice de tile en el tilemap y aparece
+el carácter correspondiente.
 
 - Fuente: charset del C64 (96 caracteres, `$20`-`$7F`), 8×8, 1bpp expandido a 2bpp.
-- **`tile = ASCII`** → aparece el glifo (el hardware ya hizo el remapeo del C64).
+- **`tile = ASCII`** → aparece el glifo. No tienes que dibujar las letras: basta
+  con escribir el código ASCII como índice de patrón.
 - Usa la **paleta 0** del fondo (color 3 = tinta = blanco).
 - **Rango útil:** `$20` (espacio) a `$7F`. Mayúsculas `$41-$5A`, minúsculas `$61-$7A`
   (están remapeadas internamente), dígitos `$30-$39`, signos `$21-$3F`.
 
-> **Reserva de tiles:** la fuente ocupa `$20`-`$7F` y el hardware la **precarga en
-> el banco de patrones al arrancar** (fase 4 de la init). Estos patrones **no son un
-> rango vacío reservado: contienen la fuente**.
+> **Reserva de tiles:** la fuente ocupa los patrones `$20`-`$7F`, que el hardware
+> **ya deja cargados al arrancar**. Estos patrones **no son un rango vacío: contienen
+> la fuente**.
 >
 > ⚠️ **No borres ni sobrescribas `$20`-`$7F`** si quieres usar texto: un "clear de
 > patrones" que escriba 0 en todo el banco **borra la fuente y el texto deja de
@@ -639,9 +647,9 @@ arriba y deja la última línea en blanco. Se hace **copiando el tilemap** desde
 ; Luego reescribe las celdas de VRAM que cambiaron (o toda la pantalla).
 ```
 
-> **Recomendación:** como el **CPU no puede leer la VRAM** (el puerto es solo de
-> escritura), la consola mantiene su propia **copia del texto en RAM** (1200 B) y
-> la vuelca a la VRAM por bloques. Es lo estándar.
+> **Recomendación:** la memoria de vídeo es de **solo escritura** (no se puede leer
+> de vuelta), así que la consola mantiene su propia **copia del texto en RAM**
+> (1200 B) y la vuelca a la VRAM por bloques. Es lo estándar.
 
 ### 9.8 HUD de texto con split de raster
 
@@ -672,8 +680,8 @@ title:  .byte "MI JUEGO", $0D
 
 ### 9.10 Colores del texto
 
-El color lo da la **paleta de la celda** (bits 1:0 de `attr_arr`), no el tilemap.
-Para cambiar el color de un texto, escribe el **atributo** de la celda:
+El color lo da la **paleta de la celda** (bits 1:0 del atributo de esa celda), no el
+tilemap. Para cambiar el color de un texto, escribe el **atributo** de la celda:
 
 ```asm
 ; poner el texto de la celda (CX,CY) en paleta P (0..3)
@@ -709,12 +717,12 @@ Para cambiar el color de un texto, escribe el **atributo** de la celda:
 - El hardware comprueba el **COLL_POINT** de cada sprite **una vez por frame,
   al entrar en VBLANK** (barrido completo del OAM), y pone el flag `SOLID_HIT`
   (bit 5 de `$D803`) si **algún** sprite toca una celda sólida.
-- `SOLID_HIT` **no es pegajoso entre frames**: `coll_flag` se limpia y se vuelve a
-  evaluar en cada VBLANK (barrido completo del OAM con los `COLL_POINT` vigentes), y
-  el resultado se mantiene durante el frame. Si quieres construir una copia en RAM
-  del OAM, **escríbelo en el mismo VBLANK**.
-- **Leer `$D803` NO limpia `SOLID_HIT`** en el bitstream actual; el bit refleja el
-  frame en curso hasta el siguiente VBLANK.
+- `SOLID_HIT` **no es un evento pegajoso**: refleja la situación del **frame en
+  curso**. Se vuelve a evaluar cada frame (con los `COLL_POINT` y el OAM del momento)
+  y el resultado se mantiene hasta el siguiente frame. Si quieres construir una copia
+  en RAM del OAM, **escríbelo en el mismo VBLANK**.
+- **Leer `$D803` no limpia `SOLID_HIT`**; el bit refleja el frame en curso hasta el
+  siguiente VBLANK.
 
 ### 10.2 Marcar una celda sólida
 
@@ -777,8 +785,8 @@ s0_no:
 no_hay:
 ```
 
-> **Regla:** el hardware dice **"alguien chocó"**; el software dice **"quién"**.
-> Para 1 solo objeto colisionador, el flag basta sin deducción.
+> **Regla:** el hardware dice **"alguien chocó"**; el software decide **"quién"**.
+> Para 1 solo objeto colisionador, la bandera basta sin deducción.
 
 > **Latencia:** 1 frame. El barrido de colisión se evalúa al **entrar en VBLANK**;
 > si el juego mueve el sprite y reescribe el OAM en *el mismo* VBLANK, el `SOLID_HIT`
@@ -807,27 +815,23 @@ cajas (AABB) de los objetos, cuyas posiciones ya tienes en RAM:
 | Bit | Nombre | Significado |
 |-----|--------|-------------|
 | 7 | `VBLANK` | 1 = fuera de la zona visible (seguro escribir VRAM/OAM) |
-| 6 | `OVERFLOW` | 1 = el line buffer se llenó en la última línea (>8 sprites). No se limpia al leer |
+| 6 | `OVERFLOW` | 1 = hubo más de 8 sprites en alguna línea del último frame. No se limpia al leer |
 | 5 | `SOLID_HIT` | 1 = algún sprite tocó un tile sólido este frame. No se limpia al leer |
 | 4 | `VIDEO_READY` | 1 = inicialización de VRAM terminada (esperar al arrancar) |
 
-> **`OVERFLOW` (detalle):** el motor tiene un line buffer con capacidad para **8
-> sprites por línea**. Si en una línea hay más de 8, se dibujan los que entran en el
-> buffer y **se descartan los demás de esa línea**; el flag se pone a 1. No indica
-> *cuál* se descartó, y se actualiza por línea.
+> **`OVERFLOW` (detalle):** el hardware puede dibujar como máximo **8 sprites por
+> línea**. Si en una línea hay más de 8, se dibujan los primeros y **se descartan los
+> demás de esa línea**; el flag se pone a 1. No indica *cuál* se descartó.
 
-> ⚠️ **Leer `$D803` NO limpia `OVERFLOW` ni `SOLID_HIT`** en el bitstream actual.
-> Ambos reflejan el estado del frame en curso:
-> - **`SOLID_HIT`**: se recalcula al entrar en VBLANK (barrido del OAM) y **se
->   mantiene durante todo el frame**, hasta el siguiente VBLANK. Es un valor "vivo"
->   del frame, no un evento pegajoso.
-> - **`OVERFLOW`**: se actualiza al inicio de cada línea; refleja si el line buffer
->   se llenó (más de 8 sprites en una línea).
+> ⚠️ **Leer `$D803` no limpia `OVERFLOW` ni `SOLID_HIT`.** Ambos reflejan el estado
+> del frame en curso:
+> - **`SOLID_HIT`**: se vuelve a evaluar al comenzar cada VBLANK y **se mantiene
+>   durante todo el frame**, hasta el siguiente VBLANK.
+> - **`OVERFLOW`**: refleja si hubo desbordamiento en el frame.
 >
-> Existe soporte (registro `clear_stats`) para limpiar flags al leer, pero **no está
-> cableado** en esta versión del core. Por tanto, **no asumas que leer los limpia**;
-> simplemente revisa el bit que te interesa. Lo demás de la nota de sondeo sigue
-> aplicando: guarda el byte en RAM si consultas varios bits.
+> Por tanto, simplemente revisa el bit que te interesa. Como son varios bits en un
+> solo registro, **guarda el byte en RAM una vez por frame** si necesitas consultar
+> más de uno.
 
 ### 11.1 Esperar VIDEO_READY al arrancar
 
@@ -906,15 +910,15 @@ inner_n:
     BNE blk
 ```
 
-> **Nota de rendimiento:** el puerto es lento a propósito (la VRAM es un solo
-> puerto). No se puede rellenar por hardware; si necesitas velocidad, mantén los
-> búferes en RAM y vuelca solo lo que cambie.
+> **Nota de rendimiento:** el acceso a la memoria de vídeo es secuencial (un dato
+> por escritura, sin auto-incremento). Si necesitas velocidad, mantén los búferes en
+> RAM y vuelca solo lo que cambie cada frame.
 
-> **Estado inicial de la VRAM:** tras `VIDEO_READY`, la VRAM ya viene inicializada
-> por el hardware: **tilemap = `$20` (espacio)**, **atributos = 0**, patrones `$00`-`$1F`
-> en blanco y la **fuente ya expandida** en `$20`-`$7F`. Si escribes tu propio mundo,
-> no necesitas limpiar todo primero, pero recuerda que **`$20`-`$7F` contiene la
-> fuente** (no la sobrescribas si usas texto).
+> **Estado inicial del vídeo:** tras `VIDEO_READY`, la memoria de vídeo ya viene
+> inicializada: **tilemap = `$20` (espacio)**, **atributos = 0**, los primeros
+> patrones en blanco y la **fuente ya cargada** en `$20`-`$7F`. Escribir tu propio
+> mundo desde cero es posible, pero recuerda que **`$20`-`$7F` contiene la fuente**
+> (no la sobrescribas si usas texto).
 
 ### 12.2 Sprite que se mueve y rebota en los bordes
 
@@ -984,7 +988,7 @@ msg:
 
 | Limitación | Valor | Nota |
 |------------|-------|------|
-| Sprites | 32 en OAM | Más → ampliar hardware |
+| Sprites | 32 en OAM | Más requeriría otro hardware |
 | Coordenada X | **9 bits (0-511)** | bit 8 en FLAGS(2) → cubre toda la pantalla |
 | Coordenada Y | 8 bits (0-255) | pantalla 240 → sobra |
 | Sprites por línea | **8** | Más → `OVERFLOW` y se pierde alguno |
@@ -993,7 +997,7 @@ msg:
 | Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores |
 | Colores en pantalla | hasta 64 | 4 colores por celda × 16 combinaciones |
 | Mapa | 64×32 | scroll con envoltura |
-| BSRAM | **agotada** | no cabe framebuffer ni tilemap doble |
+| Framebuffer | **no hay** | los píxeles se generan al vuelo |
 | Colisión sprite↔sprite | **no hay** | hacer por software (comparar X/Y) |
 | Colisión sprite↔tile | flag **global** | no dice qué sprite; deducir por software |
 | COLL_POINT | dx, dy **0-7** | auto-escala a 0-15 si el sprite es 2× |
