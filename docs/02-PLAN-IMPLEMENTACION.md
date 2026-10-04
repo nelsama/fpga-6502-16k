@@ -594,6 +594,24 @@ objetos en RAM). El hardware solo aporta la colisión **sprite↔tile** (flag gl
 
 ---
 
+### Fase 12 — Coordenada X de sprites de 9 bits ✅ COMPLETADA
+
+**Objetivo:** que los sprites puedan situarse en **todo el ancho** de la pantalla
+(320 px), no solo en X ≤ 255.
+
+**Problema:** el byte X del OAM es de 8 bits (0-255); la pantalla mide 320 px, así
+que la mitad derecha (256-319) era inalcanzable para sprites.
+
+**Diseño:**
+- **X = 9 bits** (0-511). El **bit 8** se guarda en el **bit 2 de FLAGS** (libre).
+- Afecta a: render de sprites, line buffer (`lb_x` de 9 bits) y colisión.
+- El software mantiene X en 9 bits (2 bytes) y escribe el bit 8 en FLAGS.
+
+**Coste real:** 6.409 celdas (**74%**), +185 celdas respecto a la versión previa.
+**BSRAM: 0.**
+
+---
+
 ## 3. Resumen del plan
 
 ### 3.1 Recursos REALES medidos (no estimados)
@@ -614,8 +632,9 @@ objetos en RAM). El hardware solo aporta la colisión **sprite↔tile** (flag gl
 | **Fase 9 (escalado 2×) + fix borde sprites** | **4.729** | **26/26** | **2** | 2026-10-03 |
 | **Fase 10 (colisión sprite↔tile, punto centro)** | **5.163** | **26/26** | **2** | 2026-10-03 |
 | **Fase 11 (COLL_POINT + OAM 5 bytes + auto-escala C+)** | **6.224 (72%)** | **26/26** | **2** | 2026-10-03 |
+| **Fase 12 (X de sprites de 9 bits)** | **6.409 (74%)** | **26/26** | **2** | 2026-10-03 |
 
-**Margen actual: ~2.416 celdas (28%) y 0 bloques BSRAM libres (agotada).**
+**Margen actual: ~2.231 celdas (26%) y 0 bloques BSRAM libres (agotada).**
 
 ### 3.2 Estimación de fases restantes
 

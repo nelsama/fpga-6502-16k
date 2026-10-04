@@ -109,6 +109,9 @@ para memoria, y **registros directos** para scroll/status/bandas.
   Eje Y: 0..239 (píxeles)   |  0..29 (tiles visibles)  |  0..31 (mapa)
 ```
 
+> **Sprites:** X es de **9 bits** (0-511) para cubrir los 320 px de ancho; Y es de
+> 8 bits (0-255, sobra para 240). El bit 8 de X va en FLAGS(2). Ver §6.4.
+
 **Dirección de celda en el tilemap:** `celda = (y_tile * 64) + x_tile`
 
 > ⚠️ **Margen:** los 40 px de los lados (20 px por lado) son de sincronía y no se
@@ -258,20 +261,53 @@ lt_loop:
 
 | Offset | Campo |
 |--------|-------|
-| +0 | `X` (0-255) |
+| +0 | `X` (bits 0-7 de la X de 9 bits) |
 | +1 | `Y` (0-255). **Y ≥ 248 = deshabilitado** |
 | +2 | `TILE` (0-63) |
-| +3 | `FLAGS` |
+| +3 | `FLAGS` (incluye el bit 8 de X) |
 | +4 | `COLL_POINT` |
 
-**FLAGS:** `bit7 FLIP_Y | bit6 FLIP_X | bit5 PRIO | bit4 SCALE2X | bits3:0 PALETA`
+**FLAGS:** `bit7 FLIP_Y | bit6 FLIP_X | bit5 PRIO | bit4 SCALE2X | bit2 X_bit8 | bits1:0 PALETA`
 
 - `PRIO=1` → sprite **detrás** del fondo (sólo se ve en huecos del fondo).
 - `PRIO=0` → sprite **delante** del fondo.
 - `SCALE2X=1` → sprite dibujado al doble (16×16 en pantalla).
+- **`X_bit8` (bit 2)** = bit 8 de la coordenada X → permite X de **0 a 511**
+  (toda la pantalla, 0-319). Ver §6.4.
 - Prioridad entre sprites: **menor índice de OAM gana**.
 
 **Dirección del byte en el OAM:** `sprite*5 + offset` (sprite 0..31 → byte 0..159).
+
+### 6.4 Coordenada X de 9 bits
+
+La pantalla tiene 320 px de ancho, pero el byte X del OAM es de 8 bits (0-255).
+Para que un sprite llegue a la **mitad derecha** (X 256-319), la X es de **9 bits**:
+
+- **Bits 7:0** → en el byte `X` (+0) del OAM.
+- **Bit 8** → en el **bit 2 de FLAGS**.
+
+Ejemplos:
+
+| X deseada | byte X (+0) | FLAGS bit 2 |
+|-----------|-------------|-------------|
+| 4 | `$04` | 0 |
+| 200 | `$C8` | 0 |
+| 255 | `$FF` | 0 |
+| 256 | `$00` | 1 |
+| 312 | `$38` | 1 |
+
+(El bit 2 de FLAGS se combina con la paleta y demás flags; p. ej. paleta 0 + X>255 → FLAGS = `$04`.)
+
+```asm
+; mover un sprite 1 px a la derecha con X de 9 bits (XLO = byte X, XHI = bit 8)
+    INC XLO
+    BNE .lim
+    INC XHI           ; acarreo 255->256 -> bit 8
+.lim:
+    ; escribir byte X y FLAGS (bit2 = XHI)
+    LDA XLO : STA $D802   ; (tras poner addr al byte X)
+    ; FLAGS = (XHI<<2) | flags/paleta
+```
 
 ### 6.2 Escribir un campo del OAM
 
@@ -659,6 +695,8 @@ msg:
 | Limitación | Valor | Nota |
 |------------|-------|------|
 | Sprites | 32 en OAM | Más → ampliar hardware |
+| Coordenada X | **9 bits (0-511)** | bit 8 en FLAGS(2) → cubre toda la pantalla |
+| Coordenada Y | 8 bits (0-255) | pantalla 240 → sobra |
 | Sprites por línea | **8** | Más → `OVERFLOW` y se pierde alguno |
 | Sprites (patrones) | 64 | 8×8, 2bpp |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
@@ -771,10 +809,10 @@ update:
 bit7 PRIO | bit6 FLIP_Y | bit5 FLIP_X | bit4 SOLIDO | bits3:0 PALETA
 ```
 
-### A.3 FLAGS del sprite
+**FLAGS del sprite**
 
 ```
-bit7 FLIP_Y | bit6 FLIP_X | bit5 PRIO | bit4 SCALE2X | bits3:0 PALETA
+bit7 FLIP_Y | bit6 FLIP_X | bit5 PRIO | bit4 SCALE2X | bit2 X_bit8 | bits1:0 PALETA
 ```
 
 ### A.4 Fórmulas útiles

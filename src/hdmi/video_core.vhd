@@ -293,7 +293,7 @@ architecture rtl of video_core is
     -- ========================================================================
     constant NSL : integer := 8;   -- sprites maximos por linea
 
-    type lb_x_t   is array (0 to NSL-1) of unsigned(7 downto 0);
+    type lb_x_t   is array (0 to NSL-1) of unsigned(8 downto 0);   -- X de 9 bits (0..319+)
     -- attr: tile(6) + prio(1) + flipx(1) + flipy(1) + pal(3 rsv) = 12 bits
     --   bit 11..6 = tile
     --   bit 5     = prio
@@ -323,7 +323,7 @@ architecture rtl of video_core is
 
     -- Seleccion durante el barrido visible: se elige el sprite de mayor
     -- prioridad (menor indice en el line buffer) que cubre el pixel actual.
-    signal lb_pick_x    : unsigned(7 downto 0) := (others => '0');
+    signal lb_pick_x    : unsigned(8 downto 0) := (others => '0');   -- X de 9 bits
     signal lb_pick_tile : std_logic_vector(5 downto 0) := (others => '0');
     signal lb_pick_pal  : std_logic_vector(3 downto 0) := (others => '0');
     signal lb_pick_row  : unsigned(2 downto 0) := (others => '0');
@@ -337,7 +337,7 @@ architecture rtl of video_core is
     -- (la BSRAM de patrones tiene 1 ciclo de latencia; sin este retardo, en el
     --  borde entre dos sprites distintos se mezcla el patron de uno con la X
     --  del otro -> linea de 1 pixel entre sprites compuestos).
-    signal lb_pick_x_d    : unsigned(7 downto 0) := (others => '0');
+    signal lb_pick_x_d    : unsigned(8 downto 0) := (others => '0');   -- X de 9 bits
     signal lb_pick_fx_d   : std_logic := '0';
     signal lb_pick_scale_d: std_logic := '0';
     signal lb_pick_ok_d   : std_logic := '0';
@@ -970,7 +970,7 @@ begin
     --   se captura el resultado en N+1.
     -- ========================================================================
     process (clk_pixel)
-        variable csx : unsigned(7 downto 0);
+        variable csx : unsigned(8 downto 0);   -- punto X de 9 bits (0..319+)
         variable csy : unsigned(7 downto 0);
         variable xce : unsigned(5 downto 0);
         variable yce : unsigned(4 downto 0);
@@ -1014,7 +1014,8 @@ begin
                     else
                         cix := to_integer(coll_idx);
                         -- Leer el OAM del sprite actual UNA sola vez.
-                        ox := to_integer(unsigned(oam_reg(cix*5 + 0)));
+                        --   X de 9 bits: byte X + bit 8 en FLAGS(2)
+                        ox := to_integer(unsigned(oam_reg(cix*5 + 3)(2) & oam_reg(cix*5 + 0)));
                         oy := to_integer(unsigned(oam_reg(cix*5 + 1)));
                         osp2 := oam_reg(cix*5 + 3)(4);
                         ocp  := oam_reg(cix*5 + 4);
@@ -1038,7 +1039,7 @@ begin
                             pdx := resize(sdx, 4);
                             pdy := resize(sdy, 4);
                         end if;
-                        csx := to_unsigned(ox, 8) + resize(pdx, 8);
+                        csx := to_unsigned(ox, 9) + resize(pdx, 9);
                         csy := to_unsigned(oy, 8) + resize(pdy, 8);
                         xce := resize(csx srl 3, 6);  -- celda X /8 (6 bits, 0..63)
                         yce := resize(csy srl 3, 5);  -- celda Y /8 (5 bits, 0..31)
@@ -1106,7 +1107,7 @@ begin
     -- ---- Fase 1: llenar el line buffer durante el blank ----
     process (clk_pixel)
         variable sy     : unsigned(7 downto 0);
-        variable sx     : unsigned(7 downto 0);
+        variable sx     : unsigned(8 downto 0);   -- X de 9 bits (0..319+)
         variable stile  : std_logic_vector(5 downto 0);
         variable spal   : std_logic_vector(3 downto 0);
         variable sscale : std_logic;
@@ -1135,7 +1136,8 @@ begin
                 elsif oam_scan < 32 then
                     -- evaluar el sprite 'oam_scan' (5 bytes por sprite)
                     sy     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 1));
-                    sx     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 0));
+                    -- X de 9 bits: byte X + bit 8 en FLAGS(2)
+                    sx     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 3)(2) & oam_reg(to_integer(oam_scan) * 5 + 0));
                     stile  := oam_reg(to_integer(oam_scan) * 5 + 2)(5 downto 0);
                     spal   := oam_reg(to_integer(oam_scan) * 5 + 3)(3 downto 0);
                     sscale := oam_reg(to_integer(oam_scan) * 5 + 3)(4);  -- SCALE2X
