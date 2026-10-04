@@ -1,6 +1,6 @@
 # fpga-6502-16k
 
-Computador retro basado en el procesador **MOS 6502** implementado en una [**Sipeed Tang Nano 9K**](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html) (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, SPI, UART y **chip de sonido SID 6581**.
+Computador retro basado en el procesador **MOS 6502** implementado en una [**Sipeed Tang Nano 9K**](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html) (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, SPI, UART, **chip de sonido SID 6581** y **salida de vídeo HDMI** (tiles + sprites, para juegos retro).
 
 > 🆕 **Versión 16K**: ROM ampliada a 16KB ($8000-$BFFF) para mayor espacio de programa.
 
@@ -9,31 +9,31 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 ## 🏗️ Arquitectura del Sistema
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                         Board.vhd (Top-Level)                    │
-│                                                                  │
-│  CLOCK_27MHz ──▶ [PLL ×3] ──▶ 81 MHz ──▶ SID PWM DAC             │
-│      │                                                           │
-│      └──▶ [CLKDIV] ──▶ 6.75 MHz ──▶ /2 ──▶ 3.375 MHz            │
-│                │                                                 │
-│                └──▶ /7 ──▶ ~1 MHz (SID)                          │
-│                                                                  │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                      CPU 6502 (cpu65xx_fast)                │ │
-│  │              Cycle-exact, table-driven implementation       │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-│                              │                                   │
-│                       [Data Bus Mux]                             │
-│      ┌───────────────────────┼───────────────────────┐           │
-│      ▼         ▼       ▼     ▼     ▼         ▼       ▼           │
-│ ┌────────┐┌────────┐┌────────────┐┌────────┐┌──────────┐         │
-│ │  RAM   ││  ROM   ││ Puertos I/O││SID 6581││SPI Master│         │
-│ │ 16 KB  ││ 16 KB  ││GPIO+I2C+UAR││ Audio  ││ SD Card  │         │
-│ └────────┘└────────┘└────────────┘└───┬────┘└────┬─────┘         │
-│                                       │ PWM      │ SPI           │
-│                                  [Audio Out] [SD Card]           │
-│                                   81 MHz PWM                     │
-└──────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         Board.vhd (Top-Level)                             │
+│                                                                           │
+│  CLOCK_27MHz ──▶ [PLL ×3] ──▶ 81 MHz ──▶ SID PWM DAC                       │
+│      │                                                                    │
+│      ├──▶ [CLKDIV] ──▶ 6.75 MHz ──▶ /2 ──▶ 3.375 MHz (CPU)                │
+│      │                     └──▶ /7 ──▶ ~1 MHz (SID)                       │
+│      │                                                                    │
+│      └──▶ [PLL ×5] ──▶ 135 MHz (TMDS)                                     │
+│                                                                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐  │
+│  │                      CPU 6502 (cpu65xx_fast)                        │  │
+│  └─────────────────────────────────────────────────────────────────────┘  │
+│                              │                                            │
+│                       [Data Bus Mux]                                      │
+│    ┌──────────┬──────────┬────────────┬─────────┬──────────┬──────────┐   │
+│    ▼          ▼          ▼            ▼         ▼          ▼          ▼   │
+│ ┌────────┐┌────────┐┌────────────┐┌────────┐┌──────────┐┌──────────┐      │
+│ │  RAM   ││  ROM   ││ Puertos I/O││SID 6581││SPI Master││  Vídeo   │      │
+│ │ 16 KB  ││ 16 KB  ││GPIO+I2C+UAR││ Audio  ││ SD Card  ││  HDMI    │      │
+│ └────────┘└────────┘└────────────┘└───┬────┘└────┬─────┘└────┬─────┘      │
+│                                        │ PWM      │ SPI        │ TMDS       │
+│                                                                           │
+│                  [Audio Out]      [SD Card]      [HDMI out]              │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 🗺️ Mapa de Memoria
@@ -52,32 +52,42 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 | `$C030 - $C03F` | 16 bytes | **Timer de precisión** |
 | `$C040 - $C047` | 8 bytes | **SPI Master** (SD Card) |
 | `$D400 - $D41F` | 32 bytes | **SID 6581** (compatible C64) |
-| `$D800 - $D803` | 4 bytes | **Video** (VRAM indirecta + STATUS) |
+| `$D800 - $D812` | 19 bytes | **Vídeo** (VRAM indirecta + registros) |
 | `$FFFA - $FFFF` | 6 bytes | **Vectores** (mapeados a ROM $BFFA-$BFFF) |
 
 ### Registros de Video
 
-El CPU controla el motor de video a traves de cuatro registros:
+El CPU controla el motor de video (tiles + sprites, estilo NES/VIC-II) por un
+**puerto indirecto** para la VRAM y **registros directos** para scroll/bandas/status.
 
 | Dirección | Registro | R/W | Descripción |
 |-----------|----------|-----|-------------|
-| `$D800` | `VID_ADDR_LO` | W | Byte bajo de la direccion |
-| `$D801` | `VID_ADDR_HI` | W | Area (7:6) + pat_hi (5) + dir alta (2:0) |
+| `$D800` | `VID_ADDR_LO` | W | Byte bajo de la dirección de VRAM |
+| `$D801` | `VID_ADDR_HI` | W | Área (7:6) + pat_hi (5) + bit3 + dir alta (2:0) |
 | `$D802` | `VID_DATA` | W | Dato; al escribir **dispara** la escritura |
-| `$D803` | `STATUS` | R | VBLANK (bit 7) + SPRITE_OVERFLOW (bit 6) |
+| `$D803` | `STATUS` | R | VBLANK(7), OVERFLOW(6), SOLID_HIT(5), VIDEO_READY(4) |
+| `$D804/$D805` | `SCROLL_X` lo/hi | W | Scroll X (banda media) |
+| `$D806/$D807` | `SCROLL_Y` lo/hi | W | Scroll Y (banda media) |
+| `$D808` | `MAP_STRIDE` | W | Ancho del mapa en celdas (fijo 64) |
+| `$D809` | `RASTER_LINE0` | W | Fin de banda superior (`$FF` = sin banda) |
+| `$D80A/$D80B` | `BAND2_X` lo/hi | W | Scroll X de la banda superior |
+| `$D80C/$D80D` | `BAND2_Y` lo/hi | W | Scroll Y de la banda superior |
+| `$D80E` | `RASTER_LINE1` | W | Fin de banda media (`$FF` = sin banda) |
+| `$D80F/$D810` | `BAND3_X` lo/hi | W | Scroll X de la banda inferior |
+| `$D811/$D812` | `BAND3_Y` lo/hi | W | Scroll Y de la banda inferior |
 
 **Areas** (`$D801` bits 7:6): `00`=tilemap, `01`=atributos, `10`=patrones fondo,
 `11`=sprite/OAM (bit 3: `0`=OAM, `1`=patron de sprite).
 **pat_hi** (bit 5): `0`=plano 0, `1`=plano 1 (palabra de 16 bits).
 **Los patrones de sprite** usan `$C8` (plano 0) y `$E8` (plano 1).
 
-Ejemplo (dibujar tile 2 en la celda (x=10, y=5) del tilemap):
+Ejemplo (dibujar tile 2 en la celda del tilemap; mapa 64x32, `celda = y*64 + x`):
 
 ```asm
-    ; dir = y*40 + x = 5*40 + 10 = 210 = $00D2
-    LDA #$D2
+    ; dir = y*64 + x = 5*64 + 10 = 330 = $014A
+    LDA #$4A
     STA $D800        ; dir[7:0]
-    LDA #$00         ; area=00 (tilemap), dir[10:8]=0
+    LDA #$01         ; area=00 (tilemap), dir[10:8]=1
     STA $D801
     LDA #$02         ; indice de tile
     STA $D802        ; dispara la escritura
@@ -90,11 +100,16 @@ Ejemplo (mover el sprite 0 a X=100, Y=80, tile 0, paleta 0):
     LDA #$01 : STA $D800 : LDA #$C0 : STA $D801 : LDA #80  : STA $D802  ; Y
     LDA #$02 : STA $D800 : LDA #$C0 : STA $D801 : LDA #0   : STA $D802  ; TILE
     LDA #$03 : STA $D800 : LDA #$C0 : STA $D801 : LDA #0   : STA $D802  ; FLAGS
+    LDA #$04 : STA $D800 : LDA #$C0 : STA $D801 : LDA #$24 : STA $D802  ; COLL_POINT
 ```
 
-**OAM**: 32 sprites x 4 bytes. Byte = `sprite*4 + campo` (0=X, 1=Y, 2=TILE, 3=FLAGS).
+**OAM**: 32 sprites x **5 bytes**. Byte = `sprite*5 + campo`
+(0=X, 1=Y, 2=TILE, 3=FLAGS, 4=COLL_POINT).
 **FLAGS del sprite**: bit 7 FLIP_Y, bit 6 FLIP_X, bit 5 PRIO (1=detras del fondo),
-bits 3:0 paleta. **Y >= 248 deshabilita el sprite.**
+bit 4 SCALE2X, bit 2 = bit 8 de X, bits 1:0 paleta. **Y >= 248 deshabilita el sprite.**
+**X es de 9 bits** (0-511; cubre toda la pantalla de 320 px).
+
+> 📖 **Manual completo:** [`docs/07-MANUAL-PROGRAMACION.md`](docs/07-MANUAL-PROGRAMACION.md)
 
 ### Registros I2C
 
@@ -294,6 +309,8 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 | `cpu_clk` | **3.375 MHz** | Reloj del CPU 6502 |
 | `clk_1mhz` | ~0.96 MHz | Reloj del SID 6581 (27MHz/28) |
 | `clk_fast` | 27 MHz | Filtros digitales del SID |
+| `clk_pixel` | 27 MHz | Píxel del vídeo (720×480) |
+| `clk_serial` | 135 MHz | TMDS (PLL ×5 de 27 MHz) para HDMI |
 
 ## 🔧 Componentes
 
@@ -304,8 +321,9 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 
 ### Memoria
 - **RAM**: 16 KB usando Block RAM de Gowin (8 bloques BSRAM)
-- **ROM**: 16 KB con programa hardcoded (16 bloques BSRAM, generada con Python)
-- **Uso BSRAM**: 24/26 bloques (92%)
+- **ROM**: 16 KB con programa hardcoded (12 bloques BSRAM, generada con Python)
+- **VRAM de vídeo**: 6 bloques BSRAM (tilemap, atributos, patrones, sprites, fuente)
+- **Uso BSRAM**: 26/26 bloques (100%, agotada)
 
 ### Puertos GPIO
 - **Puerto 1**: 8 bits (LVCMOS33, pines 70-77)
@@ -352,6 +370,27 @@ Pin 33 ──[3.3kΩ]──┬──[4.7nF]── GND
                   │
                   └── Amplificador/Altavoz
 ```
+
+### Módulo de Vídeo (HDMI)
+
+Coprocesador gráfico estilo NES/VIC-II, **sin framebuffer** (tiles + sprites).
+Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 68-75).
+
+- **Capas:** margen azul → fondo (tiles) → sprites (con prioridad/transparencia).
+- **Fondo:** tilemap de **64×32 celdas** (mayor que la pantalla 40×30 → scroll),
+  256 patrones de 8×8 en **2bpp** (4 colores c/u).
+- **Sprites:** 32 en OAM (8×8), 64 patrones, con flips X/Y, prioridad, **escala 2×**,
+  **X de 9 bits** (0-511). Hasta 8 sprites por línea.
+- **Scroll** horizontal y vertical sobre el mapa, con envoltura.
+- **Split de raster:** hasta **3 bandas** con scroll independiente (HUD fijo arriba/abajo).
+- **Modo texto:** charset del C64 (96 caracteres) como tiles (`tile = ASCII`).
+- **Colisión sprite↔tile** (celdas sólidas) con punto de colisión configurable y
+  auto-escala 1×/2×. La colisión sprite↔sprite se hace por software.
+- **Estados en STATUS** (`$D803`): VBLANK, SPRITE_OVERFLOW, SOLID_HIT, VIDEO_READY.
+- **Recursos:** ~6.400 celdas de lógica (74%), BSRAM de vídeo = 6/26 bloques, 2 DSP.
+
+> 📖 **Manual de programación (para juegos):** [`docs/07-MANUAL-PROGRAMACION.md`](docs/07-MANUAL-PROGRAMACION.md)
+> · Arquitectura y detalles: [`docs/`](docs/README.md)
 
 ## 📌 FPGA Target
 
@@ -454,8 +493,21 @@ src/
 ├── gowin_pll_81mhz/          # PLL 27→81 MHz para PWM DAC
 ├── gowin_sp/                 # IP RAM
 ├── i2c_master/               # IP I2C Master
-└── asm/                      # Librerías en ensamblador 6502
-    └── timer_lib.asm         # Funciones de timer/delay
+├── hdmi/                     # Módulo de video (tiles + sprites)
+│   ├── video_core.vhd        # Motor: tiles, sprites, scroll, paletas
+│   ├── video_vram.vhd        # VRAM (tilemap, atributos, patrones, sprites, fuente)
+│   ├── video_bus.vhd         # Puente CPU -> VRAM + registros
+│   ├── hdmi_module.vhd       # Salida TMDS (HDMI)
+│   ├── tmds_encoder_2.vhd    # Codificador TMDS (8b/10b)
+│   └── font_data.vhd         # Fuente del C64 precargada
+└── asm/                      # Librerías y demos en ensamblador 6502
+    ├── timer_lib.asm         # Funciones de timer/delay
+    ├── demo_collision.asm    # Demo de colisión y rebote
+    ├── demo_scale2x.asm      # Demo de escalado 2x
+    ├── demo_x9.asm           # Demo de X de 9 bits (extremo a extremo)
+    ├── demo_raster.asm       # Demo de split de raster (HUD)
+    └── mk_font_c64.py        # Generador de fuente desde el charset del C64
+docs/                         # Documentación (ver docs/README.md)
 impl/                         # Archivos de implementación (generados)
 *.gprj                        # Archivo de proyecto Gowin
 ```
@@ -469,6 +521,7 @@ impl/                         # Archivos de implementación (generados)
   - 📊 **Características**: 9K LUTs, 32 bloques BSRAM, 2 PLLs, múltiples periféricos I/O
   - ✨ **Ventajas**: Precio accesible, ecosistema activo, herramientas gratuitas (Gowin EDA)
 - Cable USB-C para programación y alimentación
+- (Opcional) Monitor/TV con **HDMI** para la salida de vídeo
 - (Opcional) Tarjeta SD para almacenamiento externo vía SPI
 - (Opcional) Altavoz/auriculares para salida de audio SID
 
