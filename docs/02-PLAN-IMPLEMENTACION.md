@@ -735,29 +735,52 @@ habilitación hacia el motor de vídeo. Es el bug que tiene hoy el SID.
 | D-09 | **Rotación de sprites** | ¿Implementar o no? | ✅ **DESCARTADA** (no prioritaria) |
 | D-10 | **Escalado de sprites** | ¿2× por hardware? | ✅ **SÍ — Fase 9** |
 | D-11 | **Split de raster** | ¿Implementar? | ✅ **SÍ — Fase 8** |
-| D-12 | **Modo bitmap** | Resolución/profundidad | ⏳ **análisis al final** — BSRAM agotada, requiere repartir |
+| D-12 | **Modo bitmap** | Resolución/profundidad | ❌ **DESCARTADO** (BSRAM agotada; ver §7.1) |
 
 ---
 
-## 7. Próximos pasos inmediatos
+## 7. Cierre del proyecto (módulo de vídeo)
 
-**Completado:** Fases 1–8 (tiles, sprites con flips, CPU→VRAM, modo texto, scroll
-H/V, split de raster con HUD fijo arriba/abajo).
+**Estado: COMPLETO.** El core de vídeo está implementado, validado en hardware y
+documentado (Fases 1–12). El objetivo del proyecto —un subsistema de vídeo para
+juegos retro sin eliminar ningún módulo— está **cumplido**.
 
-**Prioridad actual (revisada):**
+**Capacidades finales:**
 
-1. **Fase 9 — Escalado 2× de sprites** — sin rotación (descartada).
-2. **Colisiones** sprite-sprite / sprite-tile (por software o hardware parcial).
-3. **Mapa más alto/ancho** — ✅ mapa 64×32 con stride 64 (scroll H y V sobre mundo mayor que la pantalla).
-4. **Color de texto por celda** — usar `attr_arr` (ya implementado) para texto multicolor.
-5. **Cursor / scroll de texto** — rutina de consola en software.
-6. **Integración con el monitor** — cargar juegos de SD a RAM.
-7. **Medir el audio (SID)** con el TMDS activo → valida o invalida R-01.
+| Capacidad | Fase |
+|-----------|------|
+| Salida HDMI/TMDS 720×480 | 1 |
+| Motor de tiles 2bpp + tilemap | 2–3 |
+| CPU → VRAM (puerto indirecto `$D800`) | 4 |
+| Sprites + line buffer + PRIO + flips X/Y | 5 |
+| Scroll H/V (mapa 64×32, stride potencia de 2) | 6 |
+| Modo texto (fuente C64 + librería de consola) | 7 |
+| Split de raster (3 bandas, HUD fijo) | 8 |
+| Lectura fiable de `$D803` | 8.1 |
+| Escalado 2× de sprites | 9 |
+| Colisión sprite↔tile sólido | 10 |
+| Punto de colisión configurable + auto-escala 1×/2× | 11 |
+| Coordenada X de sprites de 9 bits | 12 |
 
-> **Completado en Fase 8.1:** lectura fiable de `$D803` (decodificación del `data_bus_mux`
-> + `VIDEO_READY` en el arranque).
+**Recursos finales:** ~6.409 celdas de lógica (74%), BSRAM 26/26, DSP 2/10.
 
-**Al final (análisis A):** modo bitmap — requiere repartir la BSRAM (agotada).
+**Manual de programación:** `07-MANUAL-PROGRAMACION.md`.
+
+### 7.1 Fuera de alcance (descartado)
+
+Se descarta explícitamente, por decisión, el siguiente trabajo:
+
+| Tema | Motivo |
+|------|--------|
+| Colisión sprite↔sprite por hardware | No cabe (muxes del OAM). Se hace por software. |
+| Modo bitmap | Requiere repartir BSRAM (agotada). |
+| Tilemap doble | Requiere +1 BSRAM (agotada). |
+| Rotación de sprites por hardware | Coste desproporcionado; no prioritaria. |
+| Color de texto por celda | `attr_arr` ya lo permite; se hará en software si se necesita. |
+| Integración con el monitor (SD→RAM) | Fuera del alcance del módulo de vídeo. |
+| Medición del SID con TMDS activo | Fuera del alcance del módulo de vídeo. |
+
+**El módulo de vídeo se considera cerrado.**
 
 **Descartado:** rotación de sprites.
 

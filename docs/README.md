@@ -22,19 +22,23 @@ eliminar ningún módulo existente.
 
 **Viabilidad:** verificada con datos de síntesis reales.
 
-| Recurso | Libre | Necesario | ¿Alcanza? |
-|---------|-------|-----------|-----------|
-| LUTs | 5.163 (60%) | ~800–1.400 | ✅ |
-| BSRAM | 0 bloques | 0 | ⚠️ **agotada** |
+| Recurso | Uso final | Libre | ¿Alcanza? |
+|---------|-----------|-------|-----------|
+| Lógica | 6.409 (74%) | ~2.231 | ✅ |
+| BSRAM | 26/26 | 0 | ⚠️ **agotada** |
 | PLL | 1 | 1 | ✅ |
-| DSP | 8 | 1 | ✅ |
+| DSP | 2/10 | 8 | ✅ |
 
-**Estado:** Fases 1–10 implementadas y validadas en hardware.
-El motor de vídeo soporta tiles multicolor, fondo transparente, sprites con
-line buffer, prioridad, flips X/Y, **escalado 2×**, STATUS (vblank/overflow/ready),
-**modo texto con fuente en BSRAM**, **scroll horizontal/vertical** sobre mapa 64×32,
-**split de raster (3 bandas)** y **colisión sprite↔tile sólido**. Análisis del bitmap
-pendiente (al final). Rotación de sprites descartada.
+**Estado: COMPLETO** ✅ — Fases 1–12 implementadas y validadas en hardware.
+El motor de vídeo soporta tiles multicolor, fondo transparente, sprites (line buffer,
+prioridad, flips X/Y, **escalado 2×**, **X de 9 bits**), STATUS (vblank/overflow/
+solid-hit/ready), **modo texto con fuente en BSRAM**, **scroll H/V** sobre mapa 64×32,
+**split de raster (3 bandas)**, y **colisión sprite↔tile sólido** con punto de
+colisión configurable y auto-escala 1×/2×.
+
+> **El módulo de vídeo está cerrado.** Lo descartado explícitamente (bitmap, tilemap
+doble, colisión sprite↔sprite por hardware, rotación, integración con el monitor)
+está en `02-PLAN-IMPLEMENTACION.md` §7.
 
 **Modelo:** coprocesador gráfico estilo VIC-II/NES. El software escribe
 memoria y registros; el hardware genera la señal de forma autónoma.
