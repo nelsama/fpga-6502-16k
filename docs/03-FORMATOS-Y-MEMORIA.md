@@ -247,8 +247,11 @@ Paleta maestra: 64 entradas × 12 bits (RGB 4-4-4)
 
 ### 4.3 Color de fondo global
 
-Las entradas 0 de las paletas de fondo apuntan a un registro `BG_COLOR`. Cambiar el
-"cielo" de un nivel entero cuesta **una escritura**.
+**BG_COLOR = la entrada 15 de la paleta de fondo** (`pal_bg(15)`). Cambiar el "cielo"
+de un nivel entero cuesta dos escrituras (`$D813=15`, `$D814`, `$D815`). Ver manual §4.3.
+
+> Nota: la primera idea era un registro `BG_COLOR` dedicado; se implemento como la
+> entrada 15 de la paleta para no gastar FFs (el registro propio no cabia).
 
 ### 4.3.1 Paletas de fondo actuales (IMPLEMENTADAS)
 

@@ -75,11 +75,18 @@ El CPU controla el motor de video (tiles + sprites, estilo NES/VIC-II) por un
 | `$D80E` | `RASTER_LINE1` | W | Fin de banda media (`$FF` = sin banda) |
 | `$D80F/$D810` | `BAND3_X` lo/hi | W | Scroll X de la banda inferior |
 | `$D811/$D812` | `BAND3_Y` lo/hi | W | Scroll Y de la banda inferior |
+| `$D813` | `PAL_PTR` | W | Puntero de paleta (0-15 fondo, 16-31 sprite) |
+| `$D814` | `PAL_LO` | W | Color de paleta, bits 7:0 (RGB444) |
+| `$D815` | `PAL_HI` | W | Color de paleta, bits 11:8 → escribe + auto-incrementa `PAL_PTR` |
 
 **Areas** (`$D801` bits 7:6): `00`=tilemap, `01`=atributos, `10`=patrones fondo,
 `11`=sprite/OAM (bit 3: `0`=OAM, `1`=patron de sprite).
 **pat_hi** (bit 5): `0`=plano 0, `1`=plano 1 (palabra de 16 bits).
 **Los patrones de sprite** usan `$C8` (plano 0) y `$E8` (plano 1).
+
+**Paletas escribibles** (`$D813-$D815`): 32 entradas de 12 bits (RGB444), 16 de fondo
++ 16 de sprite. Escribir `$D814` y luego `$D815` carga la entrada apuntada y avanza
+el puntero. **BG_COLOR = la entrada 15 de la paleta de fondo** (`$D813=15`).
 
 Ejemplo (dibujar tile 2 en la celda del tilemap; mapa 64x32, `celda = y*64 + x`):
 

@@ -90,7 +90,7 @@ El módulo debe soportar tres modos **mutuamente excluyentes**, seleccionables p
 - Paleta en **registros del FPGA**, no en BSRAM.
 - **Bancos separados** de paleta para fondo y sprites (8 paletas de 4 colores cada uno).
 - Color 0 de los **sprites = transparente** (por convención).
-- Color 0 del **fondo** apunta a un registro `BG_COLOR` global.
+- Color 0 del **fondo** tambien es transparente (se ve `BG_COLOR` o un sprite detras). **`BG_COLOR` = una entrada de la paleta de fondo** (la 15), escribible por el CPU. Ver manual §4.3. (Nota: la idea inicial era un registro `BG_COLOR` dedicado; se implemento como entrada de paleta por coste de recursos.)
 - Resultado: **hasta 64 colores simultáneos** en pantalla.
 
 ### RF-06 — Transformaciones de sprite
@@ -164,7 +164,9 @@ coste de 1 KB extra frente a 128.
 
 ### RF-11 — Registros de control
 
-Mapa propuesto (a confirmar en fase de diseño):
+Mapa propuesto (a confirmar en fase de diseño). **OJO: es una idea inicial; el mapa
+REAL implementado (registros `$D800-$D815`, OAM 32×5, paletas escribibles, BG_COLOR =
+pal_bg(15), etc.) está en `07-MANUAL-PROGRAMACION.md` §2.1.**
 
 | Dirección | Nombre | Función |
 |-----------|--------|---------|

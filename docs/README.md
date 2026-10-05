@@ -8,7 +8,7 @@ Sipeed Tang Nano 9K (Gowin GW1NR-9).
 | # | Documento | Contenido |
 |---|-----------|-----------|
 | 01 | [Requerimientos](01-REQUERIMIENTOS.md) | Objetivo, recursos medidos, RF/RNF, riesgos |
-| 02 | [Plan de Implementación](02-PLAN-IMPLEMENTACION.md) | Fases 0–11, presupuestos, decisiones pendientes |
+| 02 | [Plan de Implementación](02-PLAN-IMPLEMENTACION.md) | Fases 0–14, presupuestos, decisiones pendientes |
 | 03 | [Formatos y Memoria](03-FORMATOS-Y-MEMORIA.md) | Byte de atributo, OAM, COLL_POINT, paleta, mapa de memoria |
 | 04 | [Modo Texto](04-MODO-TEXTO.md) | Segunda ROM de fuente (1bpp), expansión a 2bpp, uso desde 6502 |
 | 05 | [Análisis del Bitmap](05-ANALISIS-BITMAP.md) | Viabilidad, resoluciones, coste, decisión pendiente |
@@ -45,8 +45,10 @@ memoria y registros; el hardware genera la señal de forma autónoma.
 
 **Modos:** tiles+sprites (juegos), texto (consola), bitmap (dibujo).
 
-**Especificación de color:** 2bpp, 4 colores por tile, 16 paletas por celda →
-hasta 64 colores simultáneos.
+**Especificación de color:** 2bpp, 4 colores por tile, 4 paletas de fondo + 4 de
+sprite × 4 colores. Paletas **escribibles por el CPU** (`$D813-$D815`), inicializadas
+a los valores por defecto. **BG_COLOR = la entrada 15 de la paleta de fondo.**
+Hasta 64 colores simultáneos.
 
 **Riesgo principal:** ruido de audio con TMDS a 252 MHz junto a los pines de
 audio (76–77). Debe validarse.
