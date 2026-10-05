@@ -1231,7 +1231,7 @@ msg:
 | Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0) |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
 | Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores; **escribibles** por el CPU (§4.4) |
-| Colores en pantalla | hasta 64 | 4 colores por celda × 16 combinaciones |
+| Colores en pantalla | hasta 32 | 16 de fondo (4 paletas × 4) + 16 de sprite |
 | Mapa | 64×32 | scroll con envoltura |
 | Framebuffer | **no hay** | los píxeles se generan al vuelo |
 | Colisión sprite↔sprite | **no hay** | hacer por software (comparar X/Y) |

@@ -46,9 +46,8 @@ memoria y registros; el hardware genera la señal de forma autónoma.
 **Modos:** tiles+sprites (juegos), texto (consola), bitmap (dibujo).
 
 **Especificación de color:** 2bpp, 4 colores por tile, 4 paletas de fondo + 4 de
-sprite × 4 colores. Paletas **escribibles por el CPU** (`$D813-$D815`), inicializadas
-a los valores por defecto. **BG_COLOR = la entrada 15 de la paleta de fondo.**
-Hasta 64 colores simultáneos.
+sprite × 4 colores = **hasta 32 colores simultáneos** (16 fondo + 16 sprite). Paletas
+**escribibles por el CPU** (`$D813-$D815`). **BG_COLOR = la entrada 15 de la paleta de fondo.**
 
 **Riesgo principal:** ruido de audio con TMDS a 252 MHz junto a los pines de
 audio (76–77). Debe validarse.

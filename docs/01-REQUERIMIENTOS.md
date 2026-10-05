@@ -5,6 +5,12 @@
 **Documento:** Especificación de requerimientos del subsistema de vídeo
 **Estado:** Análisis / pre-implementación
 
+> ⚠️ **DOCUMENTO HISTÓRICO (intención inicial).** Las cifras de este documento (número
+> de paletas, colores, registros, sprites, etc.) son la **ambición inicial**, no el
+> hardware implementado. El **estado real** está en `02-PLAN-IMPLEMENTACION.md`
+> (fases) y sobre todo en **`07-MANUAL-PROGRAMACION.md`** (registros y capacidades
+> reales). Cuando haya discrepancia, manda el manual.
+
 ---
 
 ## 1. Objetivo
@@ -86,12 +92,13 @@ El módulo debe soportar tres modos **mutuamente excluyentes**, seleccionables p
 
 ### RF-05 — Paleta y color
 
-- **Paleta maestra de 64 entradas × 12 bits RGB** (4.096 colores elegibles).
-- Paleta en **registros del FPGA**, no en BSRAM.
-- **Bancos separados** de paleta para fondo y sprites (8 paletas de 4 colores cada uno).
+- **Paletas de 32 entradas × 12 bits RGB** (4.096 colores elegibles).
+  *(Idea inicial: 64 entradas. Implementado: 32 = 16 fondo + 16 sprite.)*
+- Paletas en **registros del FPGA**, no en BSRAM. **Escribibles por el CPU** (`$D813-$D815`).
+- **Bancos separados** de paleta para fondo y sprites (4 paletas × 4 colores cada banco).
 - Color 0 de los **sprites = transparente** (por convención).
 - Color 0 del **fondo** tambien es transparente (se ve `BG_COLOR` o un sprite detras). **`BG_COLOR` = una entrada de la paleta de fondo** (la 15), escribible por el CPU. Ver manual §4.3. (Nota: la idea inicial era un registro `BG_COLOR` dedicado; se implemento como entrada de paleta por coste de recursos.)
-- Resultado: **hasta 64 colores simultáneos** en pantalla.
+- Resultado: **hasta 32 colores simultáneos** en pantalla (16 fondo + 16 sprite). *(Idea inicial: 64; implementado: 32.)*
 
 ### RF-06 — Transformaciones de sprite
 

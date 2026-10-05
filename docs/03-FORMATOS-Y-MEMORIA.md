@@ -228,22 +228,26 @@ lee el bit 4 (`SOLIDO`) de su atributo. Si está a 1, activa `SOLID_HIT`.
 ### 4.1 Estructura
 
 ```
-Paleta maestra: 64 entradas × 12 bits (RGB 4-4-4)
-                 = 96 bytes en registros del FPGA (no consume BSRAM)
+Paletas: 32 entradas × 12 bits (RGB 4-4-4), en registros (escribibles por CPU)
+         = 48 bytes; no consume BSRAM
 
-  ├── Paletas de FONDO:  8 paletas × 4 colores = 32 entradas
-  └── Paletas de SPRITE: 8 paletas × 4 colores = 32 entradas
+  ├── Paletas de FONDO:  4 paletas × 4 colores = 16 entradas (pal_bg)
+  └── Paletas de SPRITE: 4 paletas × 4 colores = 16 entradas (pal_spr)
 ```
+
+> El CPU las reescribe por el puerto indirecto `$D813-$D815` (auto-incremento).
+> Entrada = `paleta*4 + color` dentro de su banco (0-15 fondo, 16-31 sprite).
 
 ### 4.2 Bancos separados (decisión de diseño)
 
 **Fondo y sprites usan bancos de paleta independientes.** Motivos:
 
-1. **Transparencia:** el color 0 de sprite debe ser transparente, mientras que el
-   color 0 del fondo es un color real. Índices separados resuelven el conflicto.
+1. **Transparencia:** el color 0 es transparente en **ambos** bancos; tener bancos
+   separados permite que un sprite reutilice el mismo patrón con otra paleta sin
+   afectar al fondo.
 2. **Reutilización:** un mismo patrón de sprite con distinta paleta da variedad
    sin gastar patrones ("enemigo azul / enemigo rojo").
-3. **Coste nulo:** son registros, no BSRAM.
+3. **Coste:** son registros, no BSRAM.
 
 ### 4.3 Color de fondo global
 
@@ -255,28 +259,31 @@ de un nivel entero cuesta dos escrituras (`$D813=15`, `$D814`, `$D815`). Ver man
 
 ### 4.3.1 Paletas de fondo actuales (IMPLEMENTADAS)
 
-La `PALETTE` de fondo tiene 4 paletas de 4 colores. La **paleta 0 está reservada
-para TEXTO**:
+La `PALETTE` de fondo tiene **4 paletas de 4 colores** (valores por defecto;
+reescribibles por CPU):
 
-| Paleta | color0 | color1 | color2 | color3 | Uso |
-|--------|--------|--------|--------|--------|-----|
-| 0 | negro | gris | blanco | blanco | **texto** |
-| 1 | negro | calipso | negro | negro | varios |
-| 2 | negro | amarillo pálido | negro | negro | varios |
-| 3 | negro | gris | negro | negro | varios |
+| Paleta | color0 | color1 | color2 | color3 |
+|--------|--------|--------|--------|--------|
+| 0 | transparente | azul (`$00A`) | cian (`$0CF`) | blanco |
+| 1 | transparente | marrón (`$A62`) | gris (`$AAA`) | blanco |
+| 2 | transparente | verde (`$0A0`) | verde oscuro (`$060`) | verde |
+| 3 | transparente | gris (`$888`) | marrón (`$840`) | **BG_COLOR** (entrada 15) |
 
-La fuente se expande con **color 3** (blanco), así que sobre la paleta 0 el texto
-sale blanco sobre negro. El color de la celda se elige con los bits 1:0 de
-`attr_arr`.
+La fuente se expande con **color 3**, así que el color 3 de cada paleta define el
+color del texto. **El color 0 es siempre transparente** (en todas las paletas). El
+color de la celda se elige con los bits 1:0 de `attr_arr`.
+
+Detalle completo y paletas de sprite: manual `07-MANUAL-PROGRAMACION.md` §4.1-4.4.
 
 ### 4.4 Colores simultáneos
 
 | Nivel | Colores |
 |-------|---------|
 | Por patrón (2bpp) | 4 |
-| Por celda (16 paletas) | 16 × 4 = 64 |
-| **Simultáneos en pantalla** | **Hasta 64** |
-| Elegibles (paleta 12 bits) | 4.096 |
+| Por celda (4 paletas de fondo) | 4 × 4 = 16 |
+| Sprites (4 paletas propias) | 4 × 4 = 16 |
+| **Simultáneos en pantalla** | **hasta 32** (16 fondo + 16 sprite) |
+| Elegibles (color 12 bits) | 4.096 |
 
 Comparación: NES = 25, C64 = 16, Master System = 32.
 
