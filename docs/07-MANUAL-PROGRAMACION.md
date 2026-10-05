@@ -186,7 +186,7 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 > Usa como contenido las filas **1..28**. Ver el aviso de overscan más abajo.
 
 > **Sprites:** X es de **9 bits** (0-511) para cubrir los 320 px de ancho; Y es de
-> 8 bits (0-255, sobra para 240). El bit 8 de X va en FLAGS(2). Ver §6.4.
+> 8 bits (0-255, sobra para 240). El bit 8 de X va en FLAGS(2). Ver §6.2.
 
 **Dirección de celda en el tilemap:** `celda = (y_tile * 64) + x_tile`
 
@@ -385,8 +385,14 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 **Cómo se direcciona `sprite*8+fila`:**
 
 - `$D800` = `(sprite*8 + fila) & $FF` (bits 7:0)
-- `$D801` = área `11` + bit3=1 + `pat_hi` + bits 2:0 con los bits altos de la dirección
-  (`$C8` = plano 0, `$E8` = plano 1; ver §2.2 y Apéndice A.1).
+- `$D801` = área `11` + bit3=1 + `pat_hi` + `dir_alta` (`$C8` = plano 0, `$E8` = plano 1;
+  ver §2.2 y Apéndice A.1).
+
+> **Con los 16 patrones útiles, `dir_alta` es siempre 0.** Como `sprite` va de 0 a 15,
+> `sprite*8 + fila` está en 0..127 (cabe en 8 bits), así que **la dirección completa
+> cabe en `$D800`** y `$D801` es simplemente `$C8` (plano 0) o `$E8` (plano 1). Los
+> bits 2:0 de `$D801` (dir_alta) solo harían falta para TILE ≥ 16, que no es un uso
+> válido (ver más abajo).
 
 > ⚠️ **Rango de TILE en el OAM:** el campo `TILE` (+2) es de **6 bits** (0..63) a
 > nivel de registro, pero el banco solo tiene material para **16 patrones**. Usa
@@ -414,12 +420,12 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 - `PRIO=0` → sprite **delante** del fondo.
 - `SCALE2X=1` → sprite dibujado al doble (16×16 en pantalla).
 - **`X_bit8` (bit 2)** = bit 8 de la coordenada X → permite X de **0 a 511**
-  (toda la pantalla, 0-319). Ver §6.4.
+  (toda la pantalla, 0-319). Ver §6.2.
 - Prioridad entre sprites: **menor índice de OAM gana**.
 
 **Dirección del byte en el OAM:** `sprite*5 + offset` (sprite 0..31 → byte 0..159).
 
-### 6.4 Coordenada X de 9 bits
+### 6.2 Coordenada X de 9 bits
 
 La pantalla tiene 320 px de ancho, pero el byte X del OAM es de 8 bits (0-255).
 Para que un sprite llegue a la **mitad derecha** (X 256-319), la X es de **9 bits**:
@@ -450,7 +456,7 @@ Ejemplos:
     ; FLAGS = (XHI<<2) | flags/paleta
 ```
 
-### 6.2 Escribir un campo del OAM
+### 6.3 Escribir un campo del OAM
 
 El byte de un campo del sprite `SPR` está en `SPR*5 + FIELD`. Para multiplicar por 5
 sin instrucción de multiplicar, mantén una tabla `SPR_BASE` en ROM con
@@ -480,7 +486,7 @@ oam_put:
 > El OAM tiene 160 bytes (32 sprites × 5). Todos caben en `$D800` con la dirección
 > alta en 0, por eso `$D801` es siempre `$C0`.
 
-### 6.3 Definir un sprite completo (helper de juego)
+### 6.4 Definir un sprite completo (helper de juego)
 
 ```asm
 ; sprite_put: escribe los 5 campos del sprite SPR de una vez.
