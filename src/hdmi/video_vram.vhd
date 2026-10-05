@@ -6,7 +6,7 @@
 --
 --   tilemap   : 2048 x 8   (1200 usadas)  indice de patron por celda (40x30)
 --   attr      : 2048 x 8   (1200 usadas)  atributo por celda (paleta, flips)
---   pattern   : 2048 x 16  (1536 usadas)  patrones de FONDO, 2bpp planar
+--   pattern   : 2048 x 16  (2048 usadas)  patrones de FONDO, 2bpp planar -> 256 tiles
 --   spr_pat   : 512 x 16   (64 usadas)    patrones de SPRITE, 2bpp planar
 --
 --   El OAM (32 sprites x 5 bytes) NO esta aqui: se implementa en registros
@@ -24,7 +24,7 @@
 --   pat_data(15 downto 8) : plano 1 (bit 1 del color)
 --   pat_data(7  downto 0) : plano 0 (bit 0 del color)
 --   El bit 7 de cada byte es el pixel mas a la IZQUIERDA.
---   Fondo   : direccion = tile*8 + fila   (0..1535)
+--   Fondo   : direccion = tile*8 + fila   (0..2047, 256 tiles)
 --   Sprites : direccion = spr*8  + fila   (0..511)
 --
 -- El puerto B tiene 1 ciclo de latencia (salida registrada), que es lo que
