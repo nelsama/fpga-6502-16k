@@ -162,6 +162,15 @@ Para un patrón de fondo (`area=10`, `tile=200`, `fila=3`): `D = 200*8+3 = 1603 
 > se reserva la **fila 0 como margen** y el contenido empieza en la **fila 1**. Esto
 > afecta **solo al fondo** (no a los sprites).
 
+> ⚠️ **Recorte del monitor (overscan):** las filas **0 y 29** (los 8 píxeles lógicos
+> superiores e inferiores, es decir los **bordes absolutos** de la imagen) pueden
+> **quedar fuera** de la pantalla según el monitor/TV, que suele recortar el overscan.
+> El hardware dibuja las 30 filas pegadas al límite de la zona visible, así que no deja
+> colchón vertical (a diferencia del eje X, que sí tiene margen).
+>
+> **Recomendación:** no coloques información crítica en las filas **0 y 29**; úsalas
+> como margen y pon tu contenido entre las filas **1 y 28**. Ver §13.
+
 ---
 
 ## 4. Colores y paletas
@@ -1050,6 +1059,7 @@ msg:
 | Colisión sprite↔tile | flag **global** | no dice qué sprite; deducir por software |
 | COLL_POINT | dx, dy **0-7** | auto-escala a 0-15 si el sprite es 2× |
 | Rotación de sprites | **no hay** | usar sprites pre-rotados |
+| Overscan del monitor | variable | las filas 0 y 29 pueden recortarse según el monitor |
 
 **Buenas prácticas:**
 
@@ -1059,8 +1069,11 @@ msg:
 4. **No superes 8 sprites por línea** (o usa `OVERFLOW` para detectarlo).
 5. **Colisión de juego = software**: guarda X/Y de los objetos y compáralas.
 6. **HUD arriba:** reserva la fila 0 del tilemap (margen) y usa las filas 1+.
-7. **Personajes grandes:** usa varios sprites (16×16 = 4) o tiles (para muchos).
-8. **Muchos objetos en pantalla** (Space Invaders, etc.): usa **tiles** en el
+7. **No uses las filas 0 ni 29 para información crítica:** dependiendo del monitor
+   pueden quedar fuera de pantalla (overscan). Mantén el contenido entre las filas
+   **1 y 28**.
+8. **Personajes grandes:** usa varios sprites (16×16 = 4) o tiles (para muchos).
+9. **Muchos objetos en pantalla** (Space Invaders, etc.): usa **tiles** en el
    tilemap, no sprites.
 
 ---

@@ -779,10 +779,18 @@ Se descarta explícitamente, por decisión, el siguiente trabajo:
 | Color de texto por celda | `attr_arr` ya lo permite; se hará en software si se necesita. |
 | Integración con el monitor (SD→RAM) | Fuera del alcance del módulo de vídeo. |
 | Medición del SID con TMDS activo | Fuera del alcance del módulo de vídeo. |
+| Colchón vertical anti-overscan | El eje Y no tiene margen (las 30 filas las dibuja el hardware pegadas al límite visible). Compensarlo por hardware exigiría recortar filas útiles o cambiar el timing. Se documenta y se deja al software (no usar filas 0 y 29). |
 
 **El módulo de vídeo se considera cerrado.**
 
-**Descartado:** rotación de sprites.
+**Descartado:** rotación de sprites; colchón vertical anti-overscan.
+
+> **Nota (overscan):** el eje X sí tiene margen (20 px lógicos por lado, con clamp),
+> pero el **eje Y no**: la zona visible de 480 líneas físicas = 240 lógicos = 30 filas
+> de tile justas. Por eso las filas **0 y 29** caen en los bordes absolutos y pueden
+> recortarse según el monitor. No es un fallo de diseño sino una decisión consciente
+> (recortar filas útiles o tocar el timing no compensa). Convención: **contenido entre
+> las filas 1 y 28**; las filas 0 y 29 como margen. Ver `07-MANUAL-PROGRAMACION.md` §3.
 
 ---
 
