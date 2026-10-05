@@ -7,10 +7,10 @@
 --   tilemap   : 2048 x 8   (1200 usadas)  indice de patron por celda (40x30)
 --   attr      : 2048 x 8   (1200 usadas)  atributo por celda (paleta, flips)
 --   pattern   : 2048 x 16  (1536 usadas)  patrones de FONDO, 2bpp planar
---   spr_pat   : 128 x 16   (64 usadas)    patrones de SPRITE, 2bpp planar
+--   spr_pat   : 512 x 16   (64 usadas)    patrones de SPRITE, 2bpp planar
 --
---   El OAM (16 sprites x 4 bytes) NO esta aqui: se implementa en registros
---   dentro de video_core, porque son solo 64 bytes y no justifican un bloque
+--   El OAM (32 sprites x 5 bytes) NO esta aqui: se implementa en registros
+--   dentro de video_core, porque son solo 160 bytes y no justifican un bloque
 --   BSRAM entero de 2 KB.
 --
 -- Presupuesto real:
@@ -46,7 +46,7 @@ entity video_vram is
         wr_attr   : in  std_logic;                      -- 1 = escribir atributos
         wr_pat    : in  std_logic;                      -- 1 = escribir patrones de fondo
         wr_spr    : in  std_logic;                      -- 1 = escribir patrones de sprite
-        wr_addr   : in  std_logic_vector(10 downto 0);  -- 0..2047 (fondo) / 0..127 (sprite)
+        wr_addr   : in  std_logic_vector(10 downto 0);  -- 0..2047 (fondo) / 0..511 (sprite)
         wr_data   : in  std_logic_vector(15 downto 0);
 
         -- ====================================================================
@@ -73,7 +73,7 @@ architecture rtl of video_vram is
     type tile_arr_t is array (0 to 2047) of std_logic_vector(7 downto 0);
     type attr_arr_t is array (0 to 2047) of std_logic_vector(7 downto 0);
     type pat_arr_t  is array (0 to 2047) of std_logic_vector(15 downto 0);
-    type spr_arr_t  is array (0 to 127) of std_logic_vector(15 downto 0);
+    type spr_arr_t  is array (0 to 511) of std_logic_vector(15 downto 0);
 
     signal tile_arr : tile_arr_t;
     signal attr_arr : attr_arr_t;
@@ -107,7 +107,7 @@ begin
                 pat_arr(to_integer(unsigned(wr_addr))) <= wr_data;
             end if;
             if wr_spr = '1' then
-                spr_arr(to_integer(unsigned(wr_addr(6 downto 0)))) <= wr_data;
+                spr_arr(to_integer(unsigned(wr_addr(8 downto 0)))) <= wr_data;
             end if;
         end if;
     end process;

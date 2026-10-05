@@ -9,7 +9,7 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.3
+**Versión del manual:** 2.4
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
 + texto + scroll + split de raster + colisión sprite↔tile).
 Si recompilas el hardware, anota aquí la versión del manual correspondiente.
@@ -58,7 +58,7 @@ Tres capas, de atrás a delante:
 - **Pantalla visible:** 40×30 tiles = 320×240 píxeles lógicos.
 - **Mapa de fondo:** 64×32 celdas (más grande que la pantalla → scroll).
 - **Tiles:** 256 patrones de 8×8, 2 bpp (4 colores c/u).
-- **Sprite:** 8×8 píxeles, con hasta **16 dibujos (patrones)** distintos, flips, escala
+- **Sprite:** 8×8 píxeles, con hasta **64 dibujos (patrones)** distintos, flips, escala
   2× y prioridad. Se controlan con la **OAM** (32 sprites).
 - **Color 0 de sprite** = transparente. **Color 0 del fondo** = transparente
   (se ve `BG_COLOR` o un sprite detrás).
@@ -151,7 +151,7 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 | **Atributos** | `$40` | 2048 | bytes | `fila*64 + col` | paleta/flips/PRIO/SÓLIDO por celda |
 | **Patrones de fondo** | `$80`/`$A0` (plano 0/1) | 2048 | **palabras** | `tile*8 + fila` | 256 patrones de 8×8, 2bpp |
 | **OAM** | `$C0` (bit3=0) | 160 | bytes | `sprite*5 + campo` | 32 sprites × 5 campos |
-| **Patrones de sprite** | `$C8`/`$E8` (plano 0/1) | 128 | **palabras** | `sprite*8 + fila` | 16 patrones de 8×8, 2bpp (§6.0) |
+| **Patrones de sprite** | `$C8`/`$E8` (plano 0/1) | 512 | **palabras** | `sprite*8 + fila` | 64 patrones de 8×8, 2bpp (§6.0) |
 
 **Aclaraciones:**
 
@@ -160,7 +160,7 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 - **Tilemap y atributos:** aunque el mundo es 64×32 = 2048 celdas, la pantalla visible
   usa 40 columnas × 30 filas. Los bits 11 de dirección cubren las 2048 celdas.
 - **Patrones de fondo:** 2048 palabras de 16 bits ÷ 8 filas = **256 patrones** (0..255).
-- **Patrones de sprite:** 128 palabras ÷ 8 filas = **16 patrones** (0..15). Ver §6.0.
+- **Patrones de sprite:** 512 palabras ÷ 8 filas = **64 patrones** (0..63). Ver §6.0.
 - El banco de **fuente** (los glifos del modo texto) es una **memoria aparte**, no
   direccionable por este puerto desde el CPU; se copia a los patrones de fondo en el
   arranque (ver §9).
@@ -377,10 +377,10 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 
 | Aspecto | Valor |
 |---------|-------|
-| Patrones | **16 utilizables** (0..15) |
+| Patrones | **64** (0..63) |
 | Formato | 2bpp planar, igual que el fondo (8×8 = 8 filas × 2 planos) |
-| Palabras de 16 bits | **128** (0..127) |
-| Dirección de una fila | `sprite*8 + fila` → 0..127 |
+| Palabras de 16 bits | **512** (0..511) |
+| Dirección de una fila | `sprite*8 + fila` → 0..511 |
 
 **Cómo se direcciona `sprite*8+fila`:**
 
@@ -388,21 +388,15 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 - `$D801` = área `11` + bit3=1 + `pat_hi` + `dir_alta` (`$C8` = plano 0, `$E8` = plano 1;
   ver §2.2 y Apéndice A.1).
 
-> **Con los 16 patrones útiles, `dir_alta` es siempre 0.** Como `sprite` va de 0 a 15,
-> `sprite*8 + fila` está en 0..127 (cabe en 8 bits), así que **la dirección completa
-> cabe en `$D800`** y `$D801` es simplemente `$C8` (plano 0) o `$E8` (plano 1). Los
-> bits 2:0 de `$D801` (dir_alta) solo harían falta para TILE ≥ 16, que no es un uso
-> válido (ver más abajo).
+> **Dirección con `dir_alta`:** el banco tiene 512 palabras, así que `sprite*8+fila`
+> llega hasta 511 (9 bits). Para `sprite*8+fila <= 255` basta `$D800`; para valores
+> mayores (TILE ≥ 32) los bits altos van en los bits 2:0 de `$D801`:
+> `$D800 = dir & $FF` y `$D801 = $C8/$E8 | (dir >> 8)`. Ejemplos:
+> - TILE 5, fila 3 → dir 43 → `$D800=$2B`, `$D801=$C8` (plano 0)
+> - TILE 40, fila 0 → dir 320 → `$D800=$40`, `$D801=$C9` (plano 0, dir_alta=1)
 
-> ⚠️ **Rango de TILE en el OAM:** el campo `TILE` (+2) es de **6 bits** (0..63) a
-> nivel de registro, pero el banco solo tiene material para **16 patrones**. Usa
-> **TILE 0..15**. Con `TILE >= 16` el comportamiento **no está garantizado** (el banco
-> es más pequeño que el rango direccionado). Si tu juego necesita más de 16 dibujos
-> de sprite distintos, revisa esta limitación antes de diseñarlos.
-
-> **Nota para el autor del hardware:** hay un desajuste entre el banco (128 palabras
-> = 16 patrones) y el direccionamiento del motor (6 bits → hasta 64 patrones / 512
-> palabras). Conviene confirmar en hardware qué se ve al usar `TILE >= 16`.
+> ⚠️ **Rango de TILE en el OAM:** el campo `TILE` (+2) es de **6 bits (0..63)**, y el
+> banco tiene material para **64 patrones**. Usa **TILE 0..63**.
 
 ### 6.1 Estructura (5 bytes por sprite)
 
@@ -410,7 +404,7 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 |--------|-------|
 | +0 | `X` (bits 0-7 de la X de 9 bits) |
 | +1 | `Y` (0-255). **Y ≥ 248 = deshabilitado** |
-| +2 | `TILE` (**0-15 útiles**; se usan 6 bits = 0-63, ver §6.0) |
+| +2 | `TILE` (**0-63**; 6 bits, ver §6.0) |
 | +3 | `FLAGS` (incluye el bit 8 de X) |
 | +4 | `COLL_POINT` |
 
@@ -1133,7 +1127,7 @@ msg:
 | Coordenada X | **9 bits (0-511)** | bit 8 en FLAGS(2) → cubre toda la pantalla |
 | Coordenada Y | 8 bits (0-255) | pantalla 240 → sobra |
 | Sprites por línea | **8** | Más → `OVERFLOW` y se pierde alguno |
-| Sprites (patrones) | **16** (0..15) | 8×8, 2bpp; el registro TILE es de 6 bits pero el banco tiene 16 (§6.0) |
+| Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0) |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
 | Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores |
 | Colores en pantalla | hasta 64 | 4 colores por celda × 16 combinaciones |

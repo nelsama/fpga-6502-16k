@@ -163,7 +163,7 @@ Dirección de un campo en el OAM (escritura indirecta): **`sprite * 5 + offset`*
 | Tamaño base | **8×8** (un patrón) |
 | Objeto grande | 16×16 = **4 sprites de 8×8** en rejilla 2×2 |
 | Objeto a 2× | 16×16 = 4 sprites con `SCALE2X`, separados **+16** px |
-| Patrones | 64 disponibles (banco `spr_arr`, 128×16 = 1 bloque BSRAM) |
+| Patrones | 64 disponibles (banco `spr_arr`, 512×16 = 1 bloque BSRAM) |
 | Sprites en pantalla | 32 en OAM; **8 por línea** (line buffer) |
 | Prioridad | Menor índice de OAM gana entre sprites con el mismo PRIO |
 
@@ -372,7 +372,7 @@ Arreglos BSRAM direccionados por separado. La VRAM son **6 bloques**:
 | Tilemap | 2048×8 | 2048 (64×32) | 1 |
 | Atributos | 2048×8 | 2048 (64×32) | 1 |
 | Patrones de fondo | 2048×16 | 1536 + 768 (fuente) | 2 |
-| Patrones de sprite | 128×16 | 512 (64×8) | 1 |
+| Patrones de sprite | 512×16 | 512 (64×8) | 1 |
 | **Fuente (`font_arr`)** | **1024×9** | **768 (96×8), 1bpp** | **1** |
 | **Total** | | | **6** |
 
@@ -403,10 +403,13 @@ concatenación de bits (sin multiplicador, ~0 LUTs).
 cell_addr = (y_cell(4:0) & x_cell(5:0))    (0..2047)   -> tilemap y atributos (mapa 64x32)
               con x_cell = (x_world/8) mod 64
                   y_cell = (y_world/8) mod 32
-pat_addr  = tile * 8 + fila                (0..1535)   -> patrón de FONDO (16 bits)
-spr_addr  = sprite * 8 + fila              (0..511)    -> patrón de SPRITE (16 bits)
-oam_byte = sprite * 4 + campo              (0..127)    -> X, Y, TILE, FLAGS
+pat_addr  = tile * 8 + fila                (0..2047)   -> patrón de FONDO (16 bits)
+spr_addr  = sprite_pat * 8 + fila          (0..511)    -> patrón de SPRITE (16 bits)
+oam_byte = sprite * 5 + campo              (0..159)    -> X, Y, TILE, FLAGS, COLL_POINT
 ```
+
+> **Banco de sprites:** 512 palabras = **64 patrones** (0..63), banco aparte del de
+> fondo. El campo TILE del OAM es de 6 bits (0..63).
 
 > **Ojo con el mundo vacío:** al ser el mapa más grande que la pantalla, el
 > software debe **rellenar todas las celdas** (64×32) que pueda alcanzar el scroll.
