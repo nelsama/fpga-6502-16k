@@ -9,7 +9,7 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.2
+**Versión del manual:** 2.3
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
 + texto + scroll + split de raster + colisión sprite↔tile).
 Si recompilas el hardware, anota aquí la versión del manual correspondiente.
