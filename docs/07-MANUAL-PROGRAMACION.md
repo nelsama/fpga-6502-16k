@@ -9,7 +9,7 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.5
+**Versión del manual:** 2.6
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
 + texto + scroll + split de raster + colisión sprite↔tile).
 Si recompilas el hardware, anota aquí la versión del manual correspondiente.
@@ -100,7 +100,7 @@ para memoria, y **registros directos** para scroll/status/bandas.
 | `01` | – | – | **atributos** (del fondo) | `0..2047` |
 | `10` | 0/1 | – | **patrón de fondo** (plano 0/1) | `tile*8+fila` |
 | `11` | – | 0 | **OAM** (byte de sprite) | `0..159` |
-| `11` | 0/1 | 1 | **patrón de sprite** (plano 0/1) | `sprite*8+fila` |
+| `11` | 0/1 | 1 | **patrón de sprite** (plano 0/1) | `patron*8+fila` |
 
 **Patrón de fondo/sprite:** cada tile/patrón tiene **2 planos** (`pat_hi=0` → plano 0,
 `pat_hi=1` → plano 1). Se escriben por separado.
@@ -151,7 +151,7 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 | **Atributos** | `$40` | 2048 | bytes | `fila*64 + col` | paleta/flips/PRIO/SÓLIDO por celda |
 | **Patrones de fondo** | `$80`/`$A0` (plano 0/1) | 2048 | **palabras** | `tile*8 + fila` | 256 patrones de 8×8, 2bpp |
 | **OAM** | `$C0` (bit3=0) | 160 | bytes | `sprite*5 + campo` | 32 sprites × 5 campos |
-| **Patrones de sprite** | `$C8`/`$E8` (plano 0/1) | 512 | **palabras** | `sprite*8 + fila` | 64 patrones de 8×8, 2bpp (§6.0) |
+| **Patrones de sprite** | `$C8`/`$E8` (plano 0/1) | 512 | **palabras** | `patron*8 + fila` | 64 patrones de 8×8, 2bpp (§6.0) |
 
 **Aclaraciones:**
 
@@ -1271,7 +1271,7 @@ celda      = y_tile*64 + x_tile          (tilemap/atributo)
 $D800      = celda & $FF
 $D801      = area | ((celda >> 8) & $07)
 dir_patron = tile*8 + fila               (patrón de fondo)
-dir_spr    = sprite*8 + fila             (patrón de sprite)
+dir_spr    = patron*8 + fila             (patrón de sprite)
 byte_oam   = sprite*5 + campo            (campo 0..4)
 ```
 
