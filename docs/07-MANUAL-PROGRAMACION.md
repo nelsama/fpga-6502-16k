@@ -236,12 +236,14 @@ forma con la **paleta en los bits altos** y el **color en los bajos**:
 | 0 | (transparente) | azul (`$00A`) | cian (`$0CF`) | blanco | texto / cielo |
 | 1 | (transparente) | marrón (`$A62`) | gris (`$AAA`) | blanco | terreno |
 | 2 | (transparente) | verde (`$0A0`) | verde oscuro (`$060`) | verde | vegetación |
-| 3 | (transparente) | gris (`$888`) | marrón (`$840`) | verde | texto verde |
+| 3 | (transparente) | gris (`$888`) | marrón (`$840`) | **BG_COLOR** | entrada 15 = fondo |
 
 > **El color 0 del fondo es SIEMPRE transparente**: donde el patrón tiene color 0 no
 > se pinta fondo y se ve `BG_COLOR` (o un sprite que esté detrás). Por eso la columna
 > "color0" es transparente, no negro. El **color 3** es el que usa la fuente de texto.
-> Para "pintar negro" de verdad, usa `BG_COLOR` negro o un color 1-3 de alguna paleta.
+>
+> ⚠️ **La entrada 15 (paleta 3, color 3) es `BG_COLOR`** (§4.3), no un color de tile.
+> No la uses para tiles/texto: lo que escribas ahí sale como color de fondo.
 
 ### 4.2 Paletas de SPRITE (4 paletas × 4 colores, banco aparte)
 
@@ -270,8 +272,24 @@ tiene color 0, se ve lo que haya detrás (fondo o `BG_COLOR`).
 
 ### 4.3 Color de fondo global (`BG_COLOR`)
 
-Actual: azul cielo (`$4080C0`, RGB888). Es lo que se ve donde el fondo es color 0 y
-no hay sprite.
+Es lo que se ve en el **margen** (barras) y en el **fondo vacío** (donde el tile de
+fondo tiene color 0 y no hay sprite).
+
+**BG_COLOR = la entrada 15 de la paleta de FONDO** (`pal_bg(15)`). No tiene registro
+propio: se cambia escribiendo esa entrada con el puerto de paleta:
+
+```asm
+    LDA #15  : STA $D813     ; entrada 15 = BG_COLOR
+    LDA #$8C : STA $D814     ; bits 7:0
+    LDA #$04 : STA $D815     ; bits 11:8  -> aplica BG = $48C (azul cielo)
+```
+
+- Valor por defecto: `$48C` = azul cielo (`#4488CC`).
+- Formato **RGB444**, igual que el resto de colores.
+- ⚠️ La entrada 15 es **de uso exclusivo de BG_COLOR**: no la uses para tiles/texto
+  (lo que pongas ahí se verá como color de fondo).
+- Es **global**: un solo color para toda la pantalla. Para "fondos por zona", coloca
+  **tiles** en las celdas deseadas (las letras transparentes dejarán ver ese tile).
 
 ### 4.4 Paleta ESCRIBIBLE por el CPU (`$D813-$D815`)
 

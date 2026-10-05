@@ -122,7 +122,12 @@ architecture rtl of video_core is
     constant V_SYNC_OFF : integer := 495;
     constant V_TOTAL    : integer := 525;
 
-    constant BG_COLOR   : std_logic_vector(23 downto 0) := x"4080C0";  -- azul cielo
+    -- BG_COLOR (Fase 14): color del margen y del fondo "vacio".
+    --   NO tiene registro propio: se toma de la ENTRADA 15 de la paleta de
+    --   FONDO (pal_bg(15)). Asi el CPU lo cambia escribiendo esa entrada con
+    --   el puerto de paleta ($D813=15, $D814, $D815) y no gasta FFs extra.
+    --   Valor por defecto = pal_bg(15) inicial (ver pal_bg) = azul cielo.
+    signal bg_rgb24 : std_logic_vector(23 downto 0) := (others => '0');
 
     signal h_cnt : unsigned(9 downto 0) := (others => '0');
     signal v_cnt : unsigned(9 downto 0) := (others => '0');
@@ -222,7 +227,7 @@ architecture rtl of video_core is
         x"000", x"00A", x"0CF", x"FFF",   -- paleta 0 - TEXTO / cielo (azul / cian / blanco)
         x"000", x"A62", x"AAA", x"FFF",   -- paleta 1 - TERRENO (tierra marron / piedra gris / blanco)
         x"000", x"0A0", x"060", x"0F0",   -- paleta 2 - VEGETACION (verde / verde oscuro / verde)
-        x"000", x"888", x"840", x"0F0"    -- paleta 3 - TEXTO VERDE
+        x"000", x"888", x"840", x"48C"    -- paleta 3 - TEXTO VERDE; entrada 15 = BG_COLOR (azul cielo)
     );
     signal pal_spr : pal_t := (
         x"000", x"F80", x"840", x"000",   -- paleta 0 - piel / marron / negro
@@ -1399,7 +1404,12 @@ begin
     --     - sprite PRIO=1 activo -> sprite (detras del fondo, en los huecos)
     --     - si nada            -> BG_COLOR
     -- ========================================================================
-    rgb24 <= (BG_COLOR) when margen2 = '1' else
+    -- BG_COLOR expandido a 24 bits (nibble duplicado) desde pal_bg(15).
+    bg_rgb24 <= pal_bg(15)(11 downto 8) & pal_bg(15)(11 downto 8) &
+                pal_bg(15)(7  downto 4) & pal_bg(15)(7  downto 4) &
+                pal_bg(15)(3  downto 0) & pal_bg(15)(3  downto 0);
+
+    rgb24 <= (bg_rgb24) when margen2 = '1' else
              (spr_rgb(11 downto 8) & spr_rgb(11 downto 8) &
               spr_rgb(7  downto 4) & spr_rgb(7  downto 4) &
               spr_rgb(3  downto 0) & spr_rgb(3  downto 0))
@@ -1412,7 +1422,7 @@ begin
               spr_rgb(7  downto 4) & spr_rgb(7  downto 4) &
               spr_rgb(3  downto 0) & spr_rgb(3  downto 0))
              when spr_active1 = '1' else
-             (BG_COLOR);
+             (bg_rgb24);
 
     -- ========================================================================
     -- TRANSMISOR TMDS
