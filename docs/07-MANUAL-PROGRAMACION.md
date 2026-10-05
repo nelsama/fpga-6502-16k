@@ -9,7 +9,7 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.4
+**Versión del manual:** 2.5
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
 + texto + scroll + split de raster + colisión sprite↔tile).
 Si recompilas el hardware, anota aquí la versión del manual correspondiente.
@@ -377,26 +377,34 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 
 | Aspecto | Valor |
 |---------|-------|
-| Patrones | **64** (0..63) |
+| Patrones de sprite | **64** (índices 0..63) |
 | Formato | 2bpp planar, igual que el fondo (8×8 = 8 filas × 2 planos) |
 | Palabras de 16 bits | **512** (0..511) |
-| Dirección de una fila | `sprite*8 + fila` → 0..511 |
+| Dirección de una fila | `patron*8 + fila` → 0..511 |
 
-**Cómo se direcciona `sprite*8+fila`:**
+> **Terminología (importante):** distinguir dos cosas que suenan parecido:
+> - **índice de patrón de sprite**: qué dibujo usar (0..63). Es el valor que se
+>   escribe en el campo **`TILE`** del OAM (offset `+2`, ver §6.1).
+> - **campo `TILE` del OAM**: el byte que guarda ese índice. Rango **0..63**.
+>
+> En esta sección, `patron` = índice de patrón (0..63), equivalente al valor del
+> campo `TILE` del OAM.
 
-- `$D800` = `(sprite*8 + fila) & $FF` (bits 7:0)
+**Cómo se direcciona `patron*8+fila` en el banco:**
+
+- `$D800` = `(patron*8 + fila) & $FF` (bits 7:0)
 - `$D801` = área `11` + bit3=1 + `pat_hi` + `dir_alta` (`$C8` = plano 0, `$E8` = plano 1;
   ver §2.2 y Apéndice A.1).
 
-> **Dirección con `dir_alta`:** el banco tiene 512 palabras, así que `sprite*8+fila`
-> llega hasta 511 (9 bits). Para `sprite*8+fila <= 255` basta `$D800`; para valores
-> mayores (TILE ≥ 32) los bits altos van en los bits 2:0 de `$D801`:
+> **Dirección con `dir_alta`:** el banco tiene 512 palabras, así que `patron*8+fila`
+> llega hasta 511 (9 bits). Para `patron*8+fila <= 255` basta `$D800`; para valores
+> mayores (índice de patrón ≥ 32) los bits altos van en los bits 2:0 de `$D801`:
 > `$D800 = dir & $FF` y `$D801 = $C8/$E8 | (dir >> 8)`. Ejemplos:
-> - TILE 5, fila 3 → dir 43 → `$D800=$2B`, `$D801=$C8` (plano 0)
-> - TILE 40, fila 0 → dir 320 → `$D800=$40`, `$D801=$C9` (plano 0, dir_alta=1)
+> - patrón 5, fila 3 → dir 43 → `$D800=$2B`, `$D801=$C8` (plano 0)
+> - patrón 40, fila 0 → dir 320 → `$D800=$40`, `$D801=$C9` (plano 0, dir_alta=1)
 
-> ⚠️ **Rango de TILE en el OAM:** el campo `TILE` (+2) es de **6 bits (0..63)**, y el
-> banco tiene material para **64 patrones**. Usa **TILE 0..63**.
+> ⚠️ **Rango del campo `TILE` del OAM:** el byte `TILE` (+2) es de **6 bits (0..63)**
+> y el banco tiene **64 patrones**. Usa **TILE = 0..63** para seleccionar el patrón.
 
 ### 6.1 Estructura (5 bytes por sprite)
 
