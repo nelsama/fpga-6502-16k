@@ -9,9 +9,10 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.1
-**Plataforma:** computador 6502 con el nuevo sistema de vídeo.
-Si el hardware cambia, anota aquí la versión del manual correspondiente.
+**Versión del manual:** 2.2
+**Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
++ texto + scroll + split de raster + colisión sprite↔tile).
+Si recompilas el hardware, anota aquí la versión del manual correspondiente.
 
 ---
 
@@ -144,8 +145,12 @@ Para un patrón de fondo (`area=10`, `tile=200`, `fila=3`): `D = 200*8+3 = 1603 
 
 ```
   Eje X: 0..319 (píxeles)   |  0..39 (tiles visibles)  |  0..63 (mapa)
-  Eje Y: 0..239 (píxeles)   |  0..29 (tiles visibles)  |  0..31 (mapa)
+  Eje Y: 0..239 (píxeles)   |  0..29 (tiles generados) |  0..31 (mapa)
 ```
+
+> **Filas realmente utilizables:** aunque el hardware genera 30 filas (0..29),
+> las filas **0 y 29** pueden quedar fuera de pantalla por overscan del monitor.
+> Usa como contenido las filas **1..28**. Ver el aviso de overscan más abajo.
 
 > **Sprites:** X es de **9 bits** (0-511) para cubrir los 320 px de ancho; Y es de
 > 8 bits (0-255, sobra para 240). El bit 8 de X va en FLAGS(2). Ver §6.4.
@@ -526,7 +531,7 @@ y **BAND3_X lo/hi ocupan `$D80F`/`$D810`** (ver la tabla de registros de §2.1).
 ; En el arranque:
     LDA #24                ; banda superior = 3 filas de tiles (0 margen + 2 HUD)
     STA $D809
-    LDA #216               ; banda inferior empieza en linea 216 (filas 27..29)
+    LDA #216               ; banda inferior empieza en linea 216 (filas 27..28 utiles)
     STA $D80E
     ; HUD fijo: scroll 0 en ambas bandas
     LDA #0
@@ -538,7 +543,8 @@ y **BAND3_X lo/hi ocupan `$D80F`/`$D810`** (ver la tabla de registros de §2.1).
 - Con `RASTER_LINE0=24`, la banda superior cubre las **líneas 0..23 = filas 0..2**
   (fila 0 = margen; usa filas 1-2 para el HUD).
 - Con `RASTER_LINE1=216`, la banda inferior cubre las **líneas 216..239 = filas 27..29**
-  (y la fila 27 del mapa se solapa también con la banda media; usa 27-29 para HUD).
+  (la fila 27 del mapa se solapa también con la banda media). Recuerda que la **fila 29
+  puede recortarse** por overscan: para el HUD inferior usa las **filas 27-28**.
 
 ---
 
@@ -567,7 +573,8 @@ el carácter correspondiente.
 ### 9.1 La rejilla de texto
 
 El texto vive en el **tilemap** (64×32 celdas). Una pantalla de texto usa las
-40 columnas visibles × 30 filas. La **celda del cursor** se calcula igual que
+40 columnas visibles × **29 filas útiles** (filas 1..28; la 0 y la 29 se reservan
+por el desfase y por overscan). La **celda del cursor** se calcula igual que
 cualquier celda:
 
 ```
@@ -578,7 +585,7 @@ celda = fila * 64 + columna
 
 ```
 CX = $40        ; columna del cursor (0..39)
-CY = $41        ; fila del cursor (0..29)
+CY = $41        ; fila del cursor (0..28)   ; la fila 29 puede recortarse (overscan)
 CTMP = $42      ; temporal
 ```
 
@@ -643,45 +650,49 @@ put_str:
 
 ### 9.6 Borrar pantalla (llenar con espacios)
 
-La pantalla visible son 40 columnas × 30 filas, pero el mapa mide 64 de ancho. Por
-eso NO vale con rellenar 1200 celdas seguidas: hay que recorrer **fila por fila**
-(40 celdas en cada una) saltando el resto de la línea del mapa.
+La pantalla visible son 40 columnas × 29 filas útiles (filas 1..28), pero el mapa
+mide 64 de ancho. Por eso NO vale con rellenar celdas seguidas: hay que recorrer
+**fila por fila** (40 celdas en cada una) saltando el resto de la línea del mapa.
 
 ```asm
-; Rellena las 40x30 celdas visibles con espacio ($20).
+; Rellena las 40x29 celdas utiles (filas 1..28) con espacio ($20).
 ;   celda(fila,col) = fila*64 + col
 ;   $D800 = celda_lo = ((fila & 3) << 6) | col
 ;   $D801 = celda_hi = fila >> 2          (area 00)
+; FROW = fila actual (empieza en 1).  Y = columna actual (0..39)
 clear_screen:
-    LDA #0
-    STA $17               ; celda_lo = inicio de fila 0 (col 0)
-    STA $18               ; celda_hi = fila >> 2 (fila 0 -> 0)
-    LDX #30               ; 30 filas
+    LDA #1
+    STA FROW              ; fila actual = 1
+    LDX #28               ; 28 filas (1..28)
 clr_row:
-    LDY #40               ; 40 columnas visibles
+    LDY #0                ; columna visible 0..39
 clr_col:
-    LDA $17 : STA $D800   ; celda_lo = inicio de fila + col
-    LDA $18 : STA $D801   ; area 00 | (fila >> 2)
+    ; $D801 = fila >> 2  (calcular desde FROW)
+    LDA FROW
+    LSR A : LSR A
+    STA $D801             ; area 00 | (fila >> 2)
+    ; $D800 = ((fila & 3) << 6) | col   (col = Y)
+    LDA FROW
+    AND #$03
+    ASL A : ASL A : ASL A : ASL A : ASL A : ASL A
+    STY CTMP              ; guardar Y (TYA borraria el resultado)
+    ORA CTMP              ; ORA col
+    STA $D800
     LDA #$20              ; espacio
     STA $D802             ; dispara la escritura
-    INC $17               ; siguiente columna
-    DEY
+    INY
+    CPY #40
     BNE clr_col
-    ; siguiente fila: celda_lo avanza 64; si desborda, incrementa celda_hi
-    LDA $17 : CLC : ADC #64 : STA $17
-    BCC clr_n
-    INC $18
-clr_n:
+    INC FROW              ; siguiente fila
     DEX
     BNE clr_row
     RTS
 ```
 
 > **Cálculo de la dirección de celda:** la fila `f` empieza en `celda = f*64`.
-> Su byte bajo es `((f & 3) << 6)` y el bit alto (`f >> 2`) va en `$D801`.
-> Por eso al sumar 64 al byte bajo de la fila se incrementa el byte alto cuando
-> desborda. Alternativa más simple: recalcular ambos bytes desde `f` y `col` en cada
-> celda (como hace `put_xy`, §9.3).
+> El byte bajo para col 0 es `((f & 3) << 6)` y el bit alto (`f >> 2`) va en `$D801`.
+> Esta versión recalcula ambos bytes desde `f` y `col` en cada celda (sin llevar
+> acarreo), igual que `put_xy` (§9.3). Requiere las variables `FROW` y un temporal.
 
 > **Nota:** el puerto indirecto no auto-incrementa; hay que reescribir `$D800/$D801`
 > antes de cada `$D802`. El ejemplo lo hace en cada iteración.
@@ -693,14 +704,14 @@ arriba y deja la última línea en blanco. Se hace **copiando el tilemap** desde
 (o releyendo si tuvieras lectura de VRAM; hoy se mantiene **una copia en RAM**):
 
 ```asm
-; Idea: el juego mantiene el texto en una RAM de 40x30 (1200 bytes).
-; scroll_text: copia fila N+1 sobre fila N (N=0..28), y limpia la fila 29.
+; Idea: el juego mantiene el texto en una RAM de 40x29 (1160 bytes) para las filas
+; utiles 1..28. scroll_text: copia fila N+1 sobre fila N, y limpia la fila 28.
 ; Luego reescribe las celdas de VRAM que cambiaron (o toda la pantalla).
 ```
 
 > **Recomendación:** la memoria de vídeo es de **solo escritura** (no se puede leer
 > de vuelta), así que la consola mantiene su propia **copia del texto en RAM**
-> (1200 B) y la vuelca a la VRAM por bloques. Es lo estándar.
+> (1160 B para 29 filas) y la vuelca a la VRAM por bloques. Es lo estándar.
 
 ### 9.8 HUD de texto con split de raster
 
