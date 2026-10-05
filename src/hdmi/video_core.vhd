@@ -81,6 +81,18 @@ entity video_core is
         status_out  : out std_logic_vector(7 downto 0);
         clear_stats : in  std_logic;   -- 1 = limpiar flags sticky (al leer)
 
+        -- PALETA ESCRIBIBLE (dominio de video). Puerto indirecto con auto-incremento:
+        --   pal_wr  : pulso de 1 ciclo de clk_pixel: escribir una entrada
+        --   pal_ptr : indice de entrada (0-15 fondo, 16-31 sprite)
+        --   pal_lo  : color[7:0]
+        --   pal_hi  : color[11:8] (bits 3:0)
+        -- Al escribir (pal_wr=1) se carga la entrada pal_ptr y el puntero avanza
+        -- (gestionado en video_bus).
+        pal_wr      : in  std_logic;
+        pal_ptr     : in  std_logic_vector(4 downto 0);
+        pal_lo      : in  std_logic_vector(7 downto 0);
+        pal_hi      : in  std_logic_vector(3 downto 0);
+
         tmds_c0_p   : out std_logic;
         tmds_c0_n   : out std_logic;
         tmds_c1_p   : out std_logic;
@@ -201,27 +213,18 @@ architecture rtl of video_core is
     signal rgb24   : std_logic_vector(23 downto 0) := (others => '0');
 
     type pal_t is array (0 to 15) of std_logic_vector(11 downto 0);
-    -- Paletas de FONDO (índice = paleta[3:2] + color[1:0]).
-    --
-    --   La fuente se expande con COLOR 3, asi que el color 3 de cada paleta
-    --   define el color del TEXTO. Los colores 1 y 2 sirven para los TILES.
-    --
-    --   paleta 0: TEXTO BLANCO  (negro/azul/cian/BLANCO)
-    --   paleta 1: TEXTO AMARILLO(negro/rojo/verde/AMARILLO)
-    --   paleta 2: TEXTO CIAN   (negro/magenta/naranja/CIAN)
-    --   paleta 3: TEXTO VERDE  (negro/gris/marron/VERDE)
-    constant PALETTE : pal_t := (
+    -- PALETAS ESCRIBIBLES POR EL CPU (Fase 13).
+    --   Antes eran 'constant'; ahora son señales inicializadas a los mismos
+    --   valores (default = comportamiento previo) y escribibles via el puerto
+    --   indirecto $D813-$D815.
+    --   Indice de entrada = paleta[3:2] + color[1:0]  (0..15).
+    signal pal_bg : pal_t := (
         x"000", x"00A", x"0CF", x"FFF",   -- paleta 0 - TEXTO / cielo (azul / cian / blanco)
         x"000", x"A62", x"AAA", x"FFF",   -- paleta 1 - TERRENO (tierra marron / piedra gris / blanco)
         x"000", x"0A0", x"060", x"0F0",   -- paleta 2 - VEGETACION (verde / verde oscuro / verde)
         x"000", x"888", x"840", x"0F0"    -- paleta 3 - TEXTO VERDE
     );
-
-    -- Paletas de SPRITE (índice = paleta[3:2] + color[1:0]).
-    -- El color 0 (transparente) de cada paleta se ignora en el render.
-    --   Paleta 0: pensada para personajes -> piel / marron / negro
-    --             (indice 1 = piel rojiza, 2 = marron, 3 = negro)
-    constant SPR_PALETTE : pal_t := (
+    signal pal_spr : pal_t := (
         x"000", x"F80", x"840", x"000",   -- paleta 0 - piel / marron / negro
         x"000", x"00F", x"0FF", x"FFF",   -- paleta 1 - azul / cian / blanco
         x"000", x"F0F", x"F00", x"FFF",   -- paleta 2 - magenta / rojo / blanco
@@ -1057,6 +1060,30 @@ begin
     solid_hit <= '1' when (coll_flag /= x"00000000") else '0';
 
     -- ========================================================================
+    -- PALETA ESCRIBIBLE (Fase 13)
+    --   Escritura sincronizada (pulso pal_wr de 1 ciclo de clk_pixel, ya en
+    --   dominio de video desde video_bus).
+    --     pal_ptr 0..15  -> banco de FONDO (pal_bg)
+    --     pal_ptr 16..31 -> banco de SPRITE (pal_spr)
+    --   La entrada se escribe combinando pal_hi(3:0) & pal_lo(7:0) = 12 bits.
+    --   El auto-incremento del puntero lo gestiona video_bus.
+    -- ========================================================================
+    process (clk_pixel)
+    begin
+        if rising_edge(clk_pixel) then
+            if pal_wr = '1' then
+                if pal_ptr(4) = '0' then
+                    pal_bg(to_integer(unsigned(pal_ptr(3 downto 0)))) <=
+                        pal_hi & pal_lo;
+                else
+                    pal_spr(to_integer(unsigned(pal_ptr(3 downto 0)))) <=
+                        pal_hi & pal_lo;
+                end if;
+            end if;
+        end if;
+    end process;
+
+    -- ========================================================================
     -- VRAM
     --   El puerto A se multiplexa: durante la inicializacion (init_done='0')
     --   escribe el bloque de init; despues, el CPU. Como ambos dominios son
@@ -1091,7 +1118,7 @@ begin
     -- ========================================================================
     pixcode <= pat_dout(15 - to_integer(bitidx2)) & pat_dout(7 - to_integer(bitidx2));
     pal_idx <= attr_d1 & pixcode;
-    pal_rgb <= PALETTE(to_integer(unsigned(pal_idx)));
+    pal_rgb <= pal_bg(to_integer(unsigned(pal_idx)));
 
     -- ========================================================================
     -- EVALUADOR DE SPRITES CON LINE BUFFER
@@ -1312,7 +1339,7 @@ begin
     --   spr_pal_b es la paleta alineada a la etapa B (con spr_pixcode1).
     spl_pal_sel2 <= spr_pal_b(1 downto 0);
     spr_pal_idx  <= spl_pal_sel2 & spr_pixcode1;
-    spr_rgb      <= SPR_PALETTE(to_integer(unsigned(spr_pal_idx)));
+    spr_rgb      <= pal_spr(to_integer(unsigned(spr_pal_idx)));
 
     -- PRIO retrasado para alinear con spr_active1 (etapa 2)
     process (clk_pixel)

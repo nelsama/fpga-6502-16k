@@ -80,6 +80,11 @@ architecture arch of Board is
     signal vid_raster_line1 : std_logic_vector(7 downto 0);
     signal vid_band3_x  : std_logic_vector(10 downto 0);
     signal vid_band3_y  : std_logic_vector(10 downto 0);
+    -- Paleta escribible (Fase 13)
+    signal vid_pal_wr   : std_logic;
+    signal vid_pal_ptr  : std_logic_vector(4 downto 0);
+    signal vid_pal_lo   : std_logic_vector(7 downto 0);
+    signal vid_pal_hi   : std_logic_vector(3 downto 0);
 
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
@@ -276,7 +281,11 @@ begin
         b2y_out      => vid_band2_y,
         rl1_out      => vid_raster_line1,
         b3x_out      => vid_band3_x,
-        b3y_out      => vid_band3_y
+        b3y_out      => vid_band3_y,
+        pal_wr_out   => vid_pal_wr,
+        pal_ptr_out  => vid_pal_ptr,
+        pal_lo_out   => vid_pal_lo,
+        pal_hi_out   => vid_pal_hi
     );
 
     video_test_inst : entity work.video_core
@@ -304,6 +313,11 @@ begin
         raster_line1 => vid_raster_line1,
         band3_x     => vid_band3_x,
         band3_y     => vid_band3_y,
+
+        pal_wr      => vid_pal_wr,
+        pal_ptr     => vid_pal_ptr,
+        pal_lo      => vid_pal_lo,
+        pal_hi      => vid_pal_hi,
 
         tmds_c0_p => hdmi_tmds_c0_p_out,
         tmds_c0_n => hdmi_tmds_c0_n_out,

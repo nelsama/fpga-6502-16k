@@ -9,7 +9,7 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.6
+**Versión del manual:** 2.7
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
 + texto + scroll + split de raster + colisión sprite↔tile).
 Si recompilas el hardware, anota aquí la versión del manual correspondiente.
@@ -89,6 +89,9 @@ para memoria, y **registros directos** para scroll/status/bandas.
 | `$D80E` | `RASTER_LINE1` | W | Fin de banda media. `$FF` = sin banda |
 | `$D80F/$D810` | `BAND3_X` lo/hi | W | Scroll X de la banda inferior |
 | `$D811/$D812` | `BAND3_Y` lo/hi | W | Scroll Y de la banda inferior |
+| `$D813` | `PAL_PTR` | W | Puntero de paleta (0-15 fondo, 16-31 sprite). Ver §4.4 |
+| `$D814` | `PAL_LO` | W | Color de paleta, bits 7:0 (RGB444) |
+| `$D815` | `PAL_HI` | W | Color de paleta, bits 11:8 → **escribe la entrada y auto-incrementa `PAL_PTR`** |
 
 ### 2.2 Encoding de `$D801` (área + dirección alta)
 
@@ -217,6 +220,9 @@ Cada píxel es **2 bpp** → índice de color **0-3** dentro de la paleta de su 
 
 ### 4.1 Paletas de FONDO (4 paletas × 4 colores)
 
+> Los colores de esta tabla son los **valores por defecto** al arrancar. El CPU
+> puede reescribirlos (ver §4.4).
+
 El **atributo de la celda usa los bits 1:0** para seleccionar una de las 4 paletas
 (los bits 3:2 del atributo están reservados / no se usan). El índice final (0-15) se
 forma con la **paleta en los bits altos** y el **color en los bajos**:
@@ -238,6 +244,9 @@ forma con la **paleta en los bits altos** y el **color en los bajos**:
 > Para "pintar negro" de verdad, usa `BG_COLOR` negro o un color 1-3 de alguna paleta.
 
 ### 4.2 Paletas de SPRITE (4 paletas × 4 colores, banco aparte)
+
+> Los colores de esta tabla son los **valores por defecto** al arrancar. El CPU
+> puede reescribirlos (§4.4).
 
 Colores **RGB exactos** (24 bits, formato `#RRGGBB`). El valor es un nibble por canal
 (0-F) expandido a 8 bits, igual que en el fondo:
@@ -263,6 +272,63 @@ tiene color 0, se ve lo que haya detrás (fondo o `BG_COLOR`).
 
 Actual: azul cielo (`$4080C0`, RGB888). Es lo que se ve donde el fondo es color 0 y
 no hay sprite.
+
+### 4.4 Paleta ESCRIBIBLE por el CPU (`$D813-$D815`)
+
+Las tablas de §4.1 y §4.2 son los valores **por defecto** (al arrancar). El CPU puede
+**reescribir cualquier entrada de paleta** en cualquier momento mediante un puerto
+indirecto con **auto-incremento**. Esto permite crear tu propia paleta, hacer fundidos,
+parpadeos, paletas por nivel, etc.
+
+**Registros:**
+
+| Dir | Nombre | R/W | Función |
+|-----|--------|-----|---------|
+| `$D813` | `PAL_PTR` | W | Puntero de entrada: **0-15 = fondo**, **16-31 = sprite** |
+| `$D814` | `PAL_LO` | W | `color[7:0]` |
+| `$D815` | `PAL_HI` | W | `color[11:8]` (bits 3:0) → **escribe la entrada y `PAL_PTR++`** |
+
+- Hay **32 entradas de 12 bits (RGB444)**: 16 de fondo + 16 de sprite.
+- La entrada se calcula como `paleta*4 + color` (dentro de su banco).
+  - Fondo: entradas 0-15 → paleta 0 = 0-3, paleta 1 = 4-7, paleta 2 = 8-11, paleta 3 = 12-15.
+  - Sprite: entradas 16-31 → paleta 0 = 16-19, paleta 1 = 20-23, etc.
+- **`PAL_PTR` avanza solo** al escribir `$D815`, así que para cargar una paleta
+  completa pones el puntero **una vez** y encadenas escrituras.
+- Formato del color: **RGB444**, un nibble por canal. Ej.: `$F80` = rojo F, verde 8,
+  azul 0 = naranja `#FF8800`.
+
+**Ejemplo: definir los 4 colores de la paleta de fondo 0**
+
+```asm
+; entrada 0 del fondo (paleta 0, color 0)
+    LDA #0   : STA $D813      ; puntero = entrada 0
+    LDA #$00 : STA $D814      ; color[7:0]
+    LDA #$00 : STA $D815      ; color[11:8] -> escribe, ptr=1
+; entrada 1 (paleta 0, color 1)
+    LDA #$0A : STA $D814
+    LDA #$00 : STA $D815      ; color=00A (azul), ptr=2
+; entrada 2 (paleta 0, color 2)
+    LDA #$CF : STA $D814
+    LDA #$00 : STA $D815      ; color=0CF (cian), ptr=3
+; entrada 3 (paleta 0, color 3)
+    LDA #$FF : STA $D814
+    LDA #$0F : STA $D815      ; color=FFF (blanco), ptr=4
+```
+
+**Ejemplo: un color de SPRITE (paleta 1, color 2 = entrada 22)**
+
+```asm
+    LDA #22  : STA $D813      ; entrada 22 (sprite)
+    LDA #$F0 : STA $D814
+    LDA #$0F : STA $D815      ; color=FF0 (amarillo)
+```
+
+> **Al arrancar**, las paletas valen lo de §4.1/§4.2 (hardware). Si no escribes nada,
+> todo funciona como siempre.
+
+> ⚠️ **Escribe la paleta en VBLANK** si cambias muchos colores: aunque el motor aplica
+> el color al vuelo, hacerlo a mitad de frame puede mostrar una franja con el color
+> viejo y otra con el nuevo.
 
 ---
 
@@ -1137,7 +1203,7 @@ msg:
 | Sprites por línea | **8** | Más → `OVERFLOW` y se pierde alguno |
 | Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0) |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
-| Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores |
+| Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores; **escribibles** por el CPU (§4.4) |
 | Colores en pantalla | hasta 64 | 4 colores por celda × 16 combinaciones |
 | Mapa | 64×32 | scroll con envoltura |
 | Framebuffer | **no hay** | los píxeles se generan al vuelo |

@@ -87,7 +87,16 @@ entity video_bus is
         b2y_out     : out std_logic_vector(10 downto 0);
         rl1_out     : out std_logic_vector(7 downto 0);
         b3x_out     : out std_logic_vector(10 downto 0);
-        b3y_out     : out std_logic_vector(10 downto 0)
+        b3y_out     : out std_logic_vector(10 downto 0);
+
+        -- PALETA ESCRIBIBLE (Fase 13): puerto indirecto con auto-incremento.
+        --   $D813 = PAL_PTR  (puntero 0..31: 0-15 fondo, 16-31 sprite)
+        --   $D814 = PAL_LO   (color[7:0])
+        --   $D815 = PAL_HI   (color[11:8] en bits 3:0) -> escribe y ptr++
+        pal_wr_out  : out std_logic;                     -- pulso (dominio CPU->video)
+        pal_ptr_out : out std_logic_vector(4 downto 0);
+        pal_lo_out  : out std_logic_vector(7 downto 0);
+        pal_hi_out  : out std_logic_vector(3 downto 0)
     );
 end entity;
 
@@ -114,6 +123,7 @@ architecture rtl of video_bus is
     signal is_vid_hi  : std_logic;
     signal is_vid_dat : std_logic;
     signal is_vid_st  : std_logic;
+    signal is_vid_pal : std_logic;
 
     -- Registros de scroll (dominio CPU)
     signal sc_x_lo_r   : std_logic_vector(7 downto 0) := (others => '0');
@@ -138,6 +148,23 @@ architecture rtl of video_bus is
     signal clear_tgl  : std_logic := '0';
     signal ct_s1      : std_logic := '0';
     signal ct_s2      : std_logic := '0';
+
+    -- PALETA ESCRIBIBLE ($D813-$D815): registros en clk_sys + cruce por toggle.
+    signal pal_ptr_r  : std_logic_vector(4 downto 0) := (others => '0');
+    signal pal_lo_r   : std_logic_vector(7 downto 0) := (others => '0');
+    signal pal_hi_r   : std_logic_vector(3 downto 0) := (others => '0');
+    signal pal_req    : std_logic := '0';       -- toggle en clk_sys
+    signal pal_active_d : std_logic := '0';
+    signal pal_sync1  : std_logic := '0';
+    signal pal_sync2  : std_logic := '0';
+    signal pal_sync3  : std_logic := '0';
+    signal pal_ptr_s   : std_logic_vector(4 downto 0) := (others => '0');  -- ptr latcheado
+    signal pal_ptr_v   : std_logic_vector(4 downto 0) := (others => '0');  -- 2FF en clk_vid
+    signal pal_ptr_v2  : std_logic_vector(4 downto 0) := (others => '0');
+    signal pal_lo_v    : std_logic_vector(7 downto 0) := (others => '0');
+    signal pal_lo_v2   : std_logic_vector(7 downto 0) := (others => '0');
+    signal pal_hi_v    : std_logic_vector(3 downto 0) := (others => '0');
+    signal pal_hi_v2   : std_logic_vector(3 downto 0) := (others => '0');
     signal ct_s3      : std_logic := '0';
     signal dat_active_d : std_logic := '0';
 
@@ -147,6 +174,7 @@ begin
     is_vid_hi  <= '1' when cpu_addr = x"D801" else '0';
     is_vid_dat <= '1' when cpu_addr = x"D802" else '0';
     is_vid_st  <= '1' when cpu_addr = x"D803" else '0';
+    is_vid_pal <= '1' when cpu_addr = x"D815" else '0';   -- PAL_HI dispara la escritura
 
     -- Registros de scroll: se escriben directamente en clk_sys (valores estables;
     -- el motor los muestrea; un cambio de 1 frame de retraso es irrelevante).
@@ -229,6 +257,7 @@ begin
     -- ========================================================================
     process (clk_sys)
         variable dat_active : std_logic;
+        variable pal_active : std_logic;
     begin
         if rising_edge(clk_sys) then
             if rst_n = '0' then
@@ -237,6 +266,9 @@ begin
                 data_reg    <= (others => '0');
                 write_req   <= '0';
                 dat_active_d <= '0';
+                pal_req     <= '0';
+                pal_active_d <= '0';
+                pal_ptr_s   <= (others => '0');
             else
                 -- '1' si el CPU esta escribiendo AHORA en VID_DATA
                 if cpu_rw = '0' and is_vid_dat = '1' then
@@ -245,10 +277,21 @@ begin
                     dat_active := '0';
                 end if;
 
+                -- '1' si el CPU esta escribiendo AHORA en PAL_HI ($D815)
+                if cpu_rw = '0' and is_vid_pal = '1' then
+                    pal_active := '1';
+                else
+                    pal_active := '0';
+                end if;
+
                 if cpu_rw = '0' and is_vid_lo = '1' then
                     addr_lo_reg <= cpu_data_in;
                 elsif cpu_rw = '0' and is_vid_hi = '1' then
                     addr_hi_reg <= cpu_data_in;
+                elsif cpu_rw = '0' and cpu_addr = x"D813" then
+                    pal_ptr_r <= cpu_data_in(4 downto 0);
+                elsif cpu_rw = '0' and cpu_addr = x"D814" then
+                    pal_lo_r <= cpu_data_in;
                 end if;
 
                 -- Escritura de VID_DATA: solo en el PRIMER ciclo (flanco 0->1)
@@ -257,6 +300,16 @@ begin
                     write_req <= not write_req;   -- toggle: UNA vez por escritura
                 end if;
                 dat_active_d <= dat_active;
+
+                -- Escritura de PAL_HI ($D815): en el PRIMER ciclo -> latchear
+                -- el puntero actual y el color, disparar el toggle y auto-incrementar.
+                if (pal_active = '1') and (pal_active_d = '0') then
+                    pal_hi_r  <= cpu_data_in(3 downto 0);  -- color[11:8]
+                    pal_ptr_s <= pal_ptr_r;               -- puntero de esta entrada
+                    pal_ptr_r <= std_logic_vector(unsigned(pal_ptr_r) + 1);
+                    pal_req   <= not pal_req;             -- toggle: UNA vez
+                end if;
+                pal_active_d <= pal_active;
 
                 -- lectura del STATUS: dispara la limpieza de flags sticky
                 if (cpu_rw = '1') and (is_vid_st = '1') then
@@ -281,6 +334,16 @@ begin
                 ct_s2 <= '0';
                 ct_s3 <= '0';
                 clear_stats <= '0';
+                pal_sync1 <= '0';
+                pal_sync2 <= '0';
+                pal_sync3 <= '0';
+                pal_wr_out <= '0';
+                pal_ptr_v  <= (others => '0');
+                pal_ptr_v2 <= (others => '0');
+                pal_lo_v   <= (others => '0');
+                pal_lo_v2  <= (others => '0');
+                pal_hi_v   <= (others => '0');
+                pal_hi_v2  <= (others => '0');
             else
                 wr_sync1 <= write_req;
                 wr_sync2 <= wr_sync1;
@@ -290,6 +353,23 @@ begin
                     write_pulse <= '1';
                 else
                     write_pulse <= '0';
+                end if;
+
+                -- PALETA: sincronizar ptr/lo/hi (2FF) y detector de flanco del toggle
+                pal_ptr_v  <= pal_ptr_s;
+                pal_ptr_v2 <= pal_ptr_v;
+                pal_lo_v   <= pal_lo_r;
+                pal_lo_v2  <= pal_lo_v;
+                pal_hi_v   <= pal_hi_r;
+                pal_hi_v2  <= pal_hi_v;
+
+                pal_sync1 <= pal_req;
+                pal_sync2 <= pal_sync1;
+                pal_sync3 <= pal_sync2;
+                if pal_sync2 /= pal_sync3 then
+                    pal_wr_out <= '1';
+                else
+                    pal_wr_out <= '0';
                 end if;
 
                 -- limpieza de status (toggle sincronizado + deteccion de flanco)
@@ -304,6 +384,11 @@ begin
             end if;
         end if;
     end process;
+
+    -- Salidas de paleta (latch del puntero sincronizado)
+    pal_ptr_out <= pal_ptr_v2;
+    pal_lo_out  <= pal_lo_v2;
+    pal_hi_out  <= pal_hi_v2;
 
     -- ========================================================================
     -- Salidas hacia el motor de video
