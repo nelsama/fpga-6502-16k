@@ -242,8 +242,10 @@ forma con la **paleta en los bits altos** y el **color en los bajos**:
 > se pinta fondo y se ve `BG_COLOR` (o un sprite que esté detrás). Por eso la columna
 > "color0" es transparente, no negro. El **color 3** es el que usa la fuente de texto.
 >
-> ⚠️ **La entrada 15 (paleta 3, color 3) es `BG_COLOR`** (§4.3), no un color de tile.
-> No la uses para tiles/texto: lo que escribas ahí sale como color de fondo.
+> ⚠️ **La entrada 15 (paleta 3, color 3) coincide con `BG_COLOR`** (§4.3). Si un tile
+> usa este color, se pinta con el **color del fondo** (y cambia con él). No es un
+> color independiente para tiles: úsalo si quieres que un tile tenga "fondo del color
+> de BG" (sólido, a diferencia del color 0 que es transparente).
 
 ### 4.2 Paletas de SPRITE (4 paletas × 4 colores, banco aparte)
 
@@ -286,8 +288,15 @@ propio: se cambia escribiendo esa entrada con el puerto de paleta:
 
 - Valor por defecto: `$48C` = azul cielo (`#4488CC`).
 - Formato **RGB444**, igual que el resto de colores.
-- ⚠️ La entrada 15 es **de uso exclusivo de BG_COLOR**: no la uses para tiles/texto
-  (lo que pongas ahí se verá como color de fondo).
+- **La entrada 15 se comparte con el color 3 de la paleta 3 del fondo.** Un tile que
+  use "paleta 3, color 3" se pintará con el **mismo color que BG_COLOR** (y cambiará
+  junto con él). Es decir: **sí puedes usarla en tiles**, pero su color es **el del
+  fondo**, no uno independiente.
+
+  > **Truco útil:** como el color 15 siempre coincide con el fondo, un tile puede
+  > usarlo como "fondo opaco del color de BG": a diferencia del **color 0** (que es
+  > transparente y deja ver sprites detrás), el **color 15** pinta el color del fondo
+  > de forma **sólida** (tapa lo de abajo).
 - Es **global**: un solo color para toda la pantalla. Para "fondos por zona", coloca
   **tiles** en las celdas deseadas (las letras transparentes dejarán ver ese tile).
 
