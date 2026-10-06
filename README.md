@@ -339,6 +339,32 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
   **10, 11, 13, 14, 15, 16**
 - Cada pin configurable individualmente como entrada o salida
 
+**Registros** (ver mapa de memoria):
+
+| Dir | Registro | Función |
+|-----|----------|---------|
+| `$C000` | Puerto 1 datos | escribir (salidas) o leer (entradas) |
+| `$C001` | Puerto 2 datos | idem |
+| `$C002` | Config Puerto 1 | **por bit: 0 = salida, 1 = entrada** |
+| `$C003` | Config Puerto 2 | idem |
+
+> Tras el reset, los dos registros de config valen 0 → **todos los pines en salida**.
+> Escribe `1` en los bits que quieras usar como **entrada** (se ponen en alta impedancia).
+> Los registros de datos (`$C000`/`$C001`) se pueden **leer**; los de config
+> (`$C002`/`$C003`) son **solo escritura**.
+
+**Ejemplo: bits 0-3 como salida, bits 4-7 como entrada**
+
+```asm
+    LDA #$F0       ; bits 4-7 = 1 (entrada), bits 0-3 = 0 (salida)
+    STA $C002      ; config del Puerto 1
+
+    LDA #$05       ; valor a sacar por bits 0-3
+    STA $C000      ; escribe los pines de salida
+
+    LDA $C000      ; lee el estado de los pines (bits 4-7 = entradas)
+```
+
 ### Interfaz I2C
 - IP Core `I2C_MASTER_Top` de Gowin
 - Señal de interrupción disponible
