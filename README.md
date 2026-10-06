@@ -333,8 +333,10 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 - **Uso BSRAM**: 26/26 bloques (100%, agotada)
 
 ### Puertos GPIO
-- **Puerto 1**: 8 bits (LVCMOS33, pines 70-77)
-- **Puerto 2**: 6 bits (LVCMOS18, pines 10-16)
+- **Puerto 1**: 8 bits (LVCMOS33, BANK2 3.3V), bits 0-7 en pines
+  **42, 41, 35, 40, 34, 33, 30, 29**
+- **Puerto 2**: 6 bits (LVCMOS18, BANK3 1.8V), bits 0-5 en pines
+  **10, 11, 13, 14, 15, 16**
 - Cada pin configurable individualmente como entrada o salida
 
 ### Interfaz I2C
