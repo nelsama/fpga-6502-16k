@@ -350,10 +350,9 @@ architecture rtl of video_core is
     signal lb_pick_scale_d: std_logic := '0';
     signal lb_pick_ok_d   : std_logic := '0';
     signal x0_log_d       : unsigned(8 downto 0) := (others => '0');
-    -- paleta del sprite retrasada 2 ciclos (etapa B), para alinear con
-    -- spr_pixcode1 / spr_active1. Sin esto, la paleta (combinacional) se
-    -- combinaba con un pixel de 2 ciclos antes -> parte del sprite cambiaba
-    -- de color y parte no.
+    -- paleta del sprite retrasada 2 ciclos para alinearla con spr_pixcode
+    -- (etapa A, N+2). Sin esto, la paleta (combinacional) se combinaba con un
+    -- pixel de 2 ciclos antes -> parte del sprite cambiaba de color y parte no.
     signal spr_pal_a      : std_logic_vector(3 downto 0) := (others => '0');
     signal spr_pal_b      : std_logic_vector(3 downto 0) := (others => '0');
 
@@ -383,8 +382,6 @@ architecture rtl of video_core is
     signal spr_pal_idx  : std_logic_vector(3 downto 0) := (others => '0');
     signal spr_rgb      : std_logic_vector(11 downto 0) := (others => '0');
     signal spr_active   : std_logic := '0';
-    signal spr_active1  : std_logic := '0';
-    signal spr_pixcode1 : std_logic_vector(1 downto 0) := (others => '0');
     signal spr_prio1    : std_logic := '0';
     signal spr_prio2    : std_logic := '0';
 
@@ -1287,19 +1284,14 @@ begin
             if rst_n = '0' then
                 spr_active  <= '0';
                 spr_pixcode <= (others => '0');
-                spr_active1 <= '0';
-                spr_pixcode1 <= (others => '0');
                 lb_pick_x_d     <= (others => '0');
                 lb_pick_fx_d    <= '0';
                 lb_pick_scale_d <= '0';
                 lb_pick_ok_d    <= '0';
             else
-                -- Etapa A -> B
-                spr_active1  <= spr_active;
-                spr_pixcode1 <= spr_pixcode;
-
-                -- Paleta: 2 registros (etapa A -> B) para alinearla con
-                -- spr_pixcode1. spr_pal_a es etapa A, spr_pal_b etapa B.
+                -- Paleta: el pixel del sprite se produce en la etapa A (mismo
+                -- ciclo que el fondo, N+2). La paleta debe llegar tambien a N+2:
+                --   lb_pick_pal (N) -> spr_pal_a (N+1) -> spr_pal_b (N+2).
                 spr_pal_a <= lb_pick_pal;
                 spr_pal_b <= spr_pal_a;
 
@@ -1341,12 +1333,12 @@ begin
 
     -- paleta del sprite: 2 bits de paleta + 2 bits de color (banco SEPARADO
     -- del fondo). El color 0 (transparente) ya se descarta via spr_active.
-    --   spr_pal_b es la paleta alineada a la etapa B (con spr_pixcode1).
+    --   spr_pal_b es la paleta alineada a spr_pixcode (etapa A, N+2).
     spl_pal_sel2 <= spr_pal_b(1 downto 0);
-    spr_pal_idx  <= spl_pal_sel2 & spr_pixcode1;
+    spr_pal_idx  <= spl_pal_sel2 & spr_pixcode;
     spr_rgb      <= pal_spr(to_integer(unsigned(spr_pal_idx)));
 
-    -- PRIO retrasado para alinear con spr_active1 (etapa 2)
+    -- PRIO retrasado para alinear con spr_active (etapa A, N+2)
     process (clk_pixel)
     begin
         if rising_edge(clk_pixel) then
@@ -1413,7 +1405,7 @@ begin
              (spr_rgb(11 downto 8) & spr_rgb(11 downto 8) &
               spr_rgb(7  downto 4) & spr_rgb(7  downto 4) &
               spr_rgb(3  downto 0) & spr_rgb(3  downto 0))
-             when (spr_active1 = '1') and (spr_prio2 = '0') else
+             when (spr_active = '1') and (spr_prio2 = '0') else
              (pal_rgb(11 downto 8) & pal_rgb(11 downto 8) &
               pal_rgb(7  downto 4) & pal_rgb(7  downto 4) &
               pal_rgb(3  downto 0) & pal_rgb(3  downto 0))
@@ -1421,7 +1413,7 @@ begin
              (spr_rgb(11 downto 8) & spr_rgb(11 downto 8) &
               spr_rgb(7  downto 4) & spr_rgb(7  downto 4) &
               spr_rgb(3  downto 0) & spr_rgb(3  downto 0))
-             when spr_active1 = '1' else
+             when spr_active = '1' else
              (bg_rgb24);
 
     -- ========================================================================

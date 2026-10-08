@@ -520,6 +520,17 @@ izquierda; un objeto 16×16 a 2× se compone con 4 sprites y paso +16.
 > `lb_pick_fx`, `lb_pick_scale`, `lb_pick_ok` y `x0_log` (`*_d`). Este bug estaba
 > latente también en los sprites compuestos 1×.
 
+> **Bug corregido (píxel fantasma en el borde derecho):** tras el fix anterior
+> quedaba una **etapa B** redundante en el pipeline del sprite que retrasaba el
+> píxel de sprite **1 ciclo de más** respecto al fondo (sprite en N+3, fondo en
+> N+2). El sprite se pintaba 1 px desplazado y asomaba un píxel de columna
+> equivocada en su borde derecho (visible sobre todo con contenido en la
+> columna 7 y en la junta de sprites compuestos). Fix: **eliminar la etapa B**
+> (`spr_active1`/`spr_pixcode1`); el mux final usa la salida de la Etapa A
+> (`spr_active`/`spr_pixcode`) y la paleta `spr_pal_b`, que ya llega a N+2, igual
+> que el fondo. Sprite y fondo quedan alineados. El manual (§6) no cambia porque
+> era un detalle interno de render, no de interfaz.
+
 ---
 
 ### Fase 10 — Colisión sprite↔tile sólido ✅ COMPLETADA (punto = centro)
