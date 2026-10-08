@@ -96,7 +96,15 @@ entity video_bus is
         pal_wr_out  : out std_logic;                     -- pulso (dominio CPU->video)
         pal_ptr_out : out std_logic_vector(4 downto 0);
         pal_lo_out  : out std_logic_vector(7 downto 0);
-        pal_hi_out  : out std_logic_vector(3 downto 0)
+        pal_hi_out  : out std_logic_vector(3 downto 0);
+
+        -- SETUP de video por hardware (Fase 15)
+        --   $D816 (W): escribir cualquier valor dispara el setup (limpiar VRAM
+        --              + re-expandir la fuente).
+        --   $D817 (R): STATUS del setup -> bit4 = VIDEO_READY (1 = terminado),
+        --              bit0 = BUSY (1 = setup/init en curso).
+        setup_req_out : out std_logic;                   -- pulso (dominio CPU->video)
+        setup_busy_in : in  std_logic                    -- 1 = setup/init en curso
     );
 end entity;
 
@@ -168,6 +176,14 @@ architecture rtl of video_bus is
     signal ct_s3      : std_logic := '0';
     signal dat_active_d : std_logic := '0';
 
+    -- SETUP por hardware ($D816/$D817): peticion en clk_sys + cruce por toggle.
+    signal setup_req     : std_logic := '0';       -- toggle en clk_sys
+    signal setup_active_d: std_logic := '0';
+    signal setup_sync1   : std_logic := '0';
+    signal setup_sync2   : std_logic := '0';
+    signal is_vid_setup  : std_logic;
+    signal is_vid_setupst: std_logic;
+
 begin
 
     is_vid_lo  <= '1' when cpu_addr = x"D800" else '0';
@@ -175,6 +191,8 @@ begin
     is_vid_dat <= '1' when cpu_addr = x"D802" else '0';
     is_vid_st  <= '1' when cpu_addr = x"D803" else '0';
     is_vid_pal <= '1' when cpu_addr = x"D815" else '0';   -- PAL_HI dispara la escritura
+    is_vid_setup   <= '1' when cpu_addr = x"D816" else '0';   -- dispara setup
+    is_vid_setupst <= '1' when cpu_addr = x"D817" else '0';   -- status de setup (lectura)
 
     -- Registros de scroll: se escriben directamente en clk_sys (valores estables;
     -- el motor los muestrea; un cambio de 1 frame de retraso es irrelevante).
@@ -258,6 +276,7 @@ begin
     process (clk_sys)
         variable dat_active : std_logic;
         variable pal_active : std_logic;
+        variable setup_active : std_logic;
     begin
         if rising_edge(clk_sys) then
             if rst_n = '0' then
@@ -269,6 +288,8 @@ begin
                 pal_req     <= '0';
                 pal_active_d <= '0';
                 pal_ptr_s   <= (others => '0');
+                setup_req    <= '0';
+                setup_active_d <= '0';
             else
                 -- '1' si el CPU esta escribiendo AHORA en VID_DATA
                 if cpu_rw = '0' and is_vid_dat = '1' then
@@ -282,6 +303,13 @@ begin
                     pal_active := '1';
                 else
                     pal_active := '0';
+                end if;
+
+                -- '1' si el CPU esta escribiendo AHORA en SETUP ($D816)
+                if cpu_rw = '0' and is_vid_setup = '1' then
+                    setup_active := '1';
+                else
+                    setup_active := '0';
                 end if;
 
                 if cpu_rw = '0' and is_vid_lo = '1' then
@@ -310,6 +338,12 @@ begin
                     pal_req   <= not pal_req;             -- toggle: UNA vez
                 end if;
                 pal_active_d <= pal_active;
+
+                -- SETUP ($D816): en el PRIMER ciclo -> toggle (UNA vez)
+                if (setup_active = '1') and (setup_active_d = '0') then
+                    setup_req <= not setup_req;
+                end if;
+                setup_active_d <= setup_active;
 
                 -- lectura del STATUS: dispara la limpieza de flags sticky
                 if (cpu_rw = '1') and (is_vid_st = '1') then
@@ -344,6 +378,9 @@ begin
                 pal_lo_v2  <= (others => '0');
                 pal_hi_v   <= (others => '0');
                 pal_hi_v2  <= (others => '0');
+                setup_sync1 <= '0';
+                setup_sync2 <= '0';
+                setup_req_out <= '0';
             else
                 wr_sync1 <= write_req;
                 wr_sync2 <= wr_sync1;
@@ -381,6 +418,17 @@ begin
                 else
                     clear_stats <= '0';
                 end if;
+
+                -- SETUP: sincronizar el toggle (2FF) y detectar flanco -> pulso.
+                --   2 etapas + registro de pulso: suficiente para el cruce
+                --   lento (clk_sys 6.75 MHz -> clk_vid 27 MHz).
+                setup_sync1 <= setup_req;
+                setup_sync2 <= setup_sync1;
+                if setup_sync1 /= setup_sync2 then
+                    setup_req_out <= '1';
+                else
+                    setup_req_out <= '0';
+                end if;
             end if;
         end if;
     end process;
@@ -407,10 +455,14 @@ begin
     vid_spr  <= addr_hi_reg(3);   -- area 11: 1 = patron sprite, 0 = OAM
 
     -- ========================================================================
-    -- Lectura del STATUS por el CPU ($D803, r_w=1)
-    --   Pone el status en el bus; en cualquier otro caso, alta impedancia.
+    -- Lectura del STATUS por el CPU (r_w=1)
+    --   $D803: status del video (VBLANK/OVERFLOW/HIT/READY)
+    --   $D817: status del setup -> bit0 = BUSY, bit4 = VIDEO_READY
+    --   En cualquier otro caso, alta impedancia.
     -- ========================================================================
     cpu_data_out <= status_in when (cpu_rw = '1' and is_vid_st = '1')
+                    else ("000" & (not setup_busy_in) & "000" & setup_busy_in)
+                         when (cpu_rw = '1' and is_vid_setupst = '1')
                     else (others => 'Z');
 
 end architecture;

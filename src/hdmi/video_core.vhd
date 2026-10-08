@@ -81,6 +81,16 @@ entity video_core is
         status_out  : out std_logic_vector(7 downto 0);
         clear_stats : in  std_logic;   -- 1 = limpiar flags sticky (al leer)
 
+        -- SETUP de video por hardware (Fase 15, registro $D816)
+        --   setup_req : pulso de 1 ciclo de clk_pixel. Reinicia la secuencia de
+        --               inicializacion: limpia tilemap, atributos, patrones,
+        --               sprites y re-expande la fuente. Mientras corre,
+        --               setup_busy='1' y las escrituras del CPU a la VRAM se
+        --               ignoran (no pueden corromper el setup).
+        --   setup_busy: 1 mientras el setup esta en curso (= not init_done).
+        setup_req   : in  std_logic;
+        setup_busy  : out std_logic;
+
         -- PALETA ESCRIBIBLE (dominio de video). Puerto indirecto con auto-incremento:
         --   pal_wr  : pulso de 1 ciclo de clk_pixel: escribir una entrada
         --   pal_ptr : indice de entrada (0-15 fondo, 16-31 sprite)
@@ -243,6 +253,13 @@ architecture rtl of video_core is
     signal init_cnt   : integer range 0 to 2047 := 0;
     signal col_cnt    : integer range 0 to 63 := 0;
     signal init_done  : std_logic := '0';
+
+    -- SETUP por hardware (Fase 15): el CPU pide un reinicio de la secuencia de
+    -- inicializacion. setup_req es un PULSO de 1 ciclo de clk_pixel ya
+    -- sincronizado por video_bus (no hace falta re-sincronizar aqui).
+    -- 1 = la secuencia en curso es un SETUP (limpiar), no la init de arranque.
+    -- Fuerza datos limpios (tilemap/atributos/patrones a 0) y re-expande fuente.
+    signal setup_latch : std_logic := '0';
 
     -- fase 4: expansion de la fuente (font_arr 1bpp -> pat_arr 2bpp)
     signal font_init_addr : unsigned(9 downto 0) := (others => '0');
@@ -616,13 +633,28 @@ begin
     begin
         if rising_edge(clk_pixel) then
             if rst_n = '0' then
-                init_phase <= 0;
-                init_cnt   <= 0;
-                col_cnt    <= 0;
-                init_done  <= '0';
+                init_phase   <= 0;
+                init_cnt     <= 0;
+                col_cnt      <= 0;
+                init_done    <= '0';
+                setup_latch  <= '0';
+            elsif setup_req = '1' then
+                -- PULSO DE SETUP (ya sincronizado por video_bus): reiniciar la
+                -- secuencia de inicializacion. Las escrituras del CPU a la VRAM
+                -- quedan ignoradas mientras init_done='0' (ver mascara cpu_we_*),
+                -- asi no pueden corromper el setup. setup_latch = 1 fuerza datos
+                -- "limpios" (no demo).
+                init_phase  <= 0;
+                init_cnt    <= 0;
+                col_cnt     <= 0;
+                init_done   <= '0';
+                setup_latch <= '1';
             elsif init_done = '0' then
                 if init_phase = 0 then
-                    if init_cnt = 1199 then
+                    -- Limpia TODO el tilemap (2048 celdas del banco), no solo
+                    -- las 1200 visibles: asi el setup tambien deja limpio el
+                    -- area del mapa que el scroll puede mostrar.
+                    if init_cnt = 2047 then
                         init_phase <= 1;
                         init_cnt   <= 0;
                         col_cnt    <= 0;
@@ -635,7 +667,8 @@ begin
                         end if;
                     end if;
                 elsif init_phase = 1 then
-                    if init_cnt = 1199 then
+                    -- Limpia TODOS los atributos (2048).
+                    if init_cnt = 2047 then
                         init_phase <= 2;
                         init_cnt   <= 0;
                     else
@@ -663,7 +696,8 @@ begin
                     -- cubrir la latencia de la BSRAM de fuente (2 de entrada,
                     -- 2 de salida) sin perder filas.
                     if init_cnt = 771 then
-                        init_done <= '1';
+                        init_done   <= '1';
+                        setup_latch <= '0';   -- fin del setup (si era setup)
                     else
                         init_cnt <= init_cnt + 1;
                     end if;
@@ -723,7 +757,7 @@ begin
                -- con la llegada del dato de la BSRAM de fuente (font_row_d).
                std_logic_vector(to_unsigned(256, 11) + font_cnt_d2);
 
-    process (init_phase, init_cnt, col_cnt, init_done, cpu_wr_data, font_row_d, font_color)
+    process (init_phase, init_cnt, col_cnt, init_done, cpu_wr_data, font_row_d, font_color, setup_latch)
         variable t  : integer range 0 to 7;
         variable r  : integer range 0 to 7;
         variable p0 : std_logic_vector(7 downto 0);
@@ -737,11 +771,16 @@ begin
         if init_done = '1' then
             -- El CPU manda: dato completo de 16 bits.
             wr_data <= cpu_wr_data;
+        elsif setup_latch = '1' and init_phase /= 4 then
+            -- SETUP: limpiar tilemap/atributos/patrones/sprites a 0.
+            -- (La fase 4 SI re-expande la fuente, ver abajo.)
+            wr_data <= (others => '0');
         elsif init_phase = 4 then
             -- FUENTE: expandir el byte 1bpp de font_arr (font_row_d) a 2bpp
             -- planar. El color de la fuente lo elige font_color:
             --   plano0 = byte AND MASK_LO[color]
             --   plano1 = byte AND MASK_HI[color]
+            --   (se ejecuta igual en init de arranque y en setup)
             wr_data(7 downto 0)  <= font_row_d and MASK_LO(to_integer(unsigned(font_color)));
             wr_data(15 downto 8) <= font_row_d and MASK_HI(to_integer(unsigned(font_color)));
         elsif init_phase = 3 then
@@ -915,7 +954,13 @@ begin
                 we_p := '0';
                 we_s := '0';
 
-                if vid_we = '1' then
+                -- BLOQUEO durante init/setup: mientras la secuencia de
+                -- inicializacion (o el setup por hardware) esta en curso
+                -- (init_done='0'), las escrituras del CPU a la VRAM y al OAM
+                -- se IGNORAN, para que no corrompan el estado que escribe la
+                -- FSM. El CPU puede escribir scroll/paleta igual (no pasan
+                -- por aqui).
+                if vid_we = '1' and init_done = '1' then
                     cpu_wr_addr <= vid_addr;
 
                     if vid_area = "00" then
@@ -1383,6 +1428,9 @@ begin
     --   atributo) durante el frame. Se actualiza una vez por frame (blanking).
     status_reg <= vblank_f & overflow_f & solid_hit & init_done & "0000";
     status_out <= status_reg;
+
+    -- SETUP (Fase 15): ocupado mientras init_done='0' (init de arranque o setup).
+    setup_busy <= not init_done;
 
     -- ========================================================================
     -- COLOR FINAL: 3 capas (margen, fondo, sprite)

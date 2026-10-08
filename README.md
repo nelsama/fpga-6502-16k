@@ -78,6 +78,8 @@ El CPU controla el motor de video (tiles + sprites, estilo NES/VIC-II) por un
 | `$D813` | `PAL_PTR` | W | Puntero de paleta (0-15 fondo, 16-31 sprite) |
 | `$D814` | `PAL_LO` | W | Color de paleta, bits 7:0 (RGB444) |
 | `$D815` | `PAL_HI` | W | Color de paleta, bits 11:8 → escribe + auto-incrementa `PAL_PTR` |
+| `$D816` | `SETUP` | W | Escribir cualquier valor **dispara el setup de hardware** (limpiar VRAM + re-expandir fuente) |
+| `$D817` | `SETUP_ST` | R | Estado del setup: bit0 = BUSY, bit4 = VIDEO_READY |
 
 **Areas** (`$D801` bits 7:6): `00`=tilemap, `01`=atributos, `10`=patrones fondo,
 `11`=sprite/OAM (bit 3: `0`=OAM, `1`=patron de sprite).
@@ -87,6 +89,12 @@ El CPU controla el motor de video (tiles + sprites, estilo NES/VIC-II) por un
 **Paletas escribibles** (`$D813-$D815`): 32 entradas de 12 bits (RGB444), 16 de fondo
 + 16 de sprite. Escribir `$D814` y luego `$D815` carga la entrada apuntada y avanza
 el puntero. **BG_COLOR = la entrada 15 de la paleta de fondo** (`$D813=15`).
+
+**Setup de video por hardware** (`$D816`): escribe cualquier valor para limpiar la
+VRAM (tilemap, atributos, patrones, sprites) y **re-expandir la fuente de texto**,
+todo en ~120-275 µs. Mientras corre, las escrituras del CPU a la VRAM/OAM se
+ignoran (`$D817` bit0 = BUSY) y la pantalla queda del color de fondo. No toca RAM,
+ROM, paletas, scroll ni bandas. Ver el manual §11.3.
 
 Ejemplo (dibujar tile 2 en la celda del tilemap; mapa 64x32, `celda = y*64 + x`):
 
@@ -421,6 +429,8 @@ Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 
 - **Modo texto:** charset del C64 (96 caracteres) como tiles (`tile = ASCII`).
 - **Colisión sprite↔tile** (celdas sólidas) con punto de colisión configurable y
   auto-escala 1×/2×. La colisión sprite↔sprite se hace por software.
+- **Setup de hardware** (`$D816`): limpia toda la VRAM y re-expande la fuente de
+  texto en ~120-275 µs, para cambiar de pantalla sin hacerlo celda a celda.
 - **Estados en STATUS** (`$D803`): VBLANK, SPRITE_OVERFLOW, SOLID_HIT, VIDEO_READY.
 - **Recursos:** ~6.400 celdas de lógica (74%), BSRAM de vídeo = 6/26 bloques, 2 DSP.
 

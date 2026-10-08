@@ -82,10 +82,11 @@ begin
                 -- Puerto 2
                 data_bus_out <= port2_in; 
 
-            elsif (addr_in = x"D803" and r_w='1') then
-                -- STATUS del video ($D803): VBLANK / OVERFLOW / VIDEO_READY
-                -- (Fase 8.1: lectura fiable del estado del video, antes dependia
-                --  de la resolucion de 'Z' entre el mux y el video_bus)
+            elsif ((addr_in = x"D803" or addr_in = x"D817") and r_w='1') then
+                -- Registros de LECTURA del video:
+                --   $D803 STATUS (VBLANK/OVERFLOW/HIT/READY)
+                --   $D817 STATUS del SETUP (bit0=BUSY, bit4=READY)
+                -- video_bus selecciona cual de los dos segun la direccion.
                 data_bus_out <= video_data_bus_in;
 
             else

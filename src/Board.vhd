@@ -86,6 +86,10 @@ architecture arch of Board is
     signal vid_pal_lo   : std_logic_vector(7 downto 0);
     signal vid_pal_hi   : std_logic_vector(3 downto 0);
 
+    -- SETUP por hardware (Fase 15)
+    signal vid_setup_req  : std_logic;
+    signal vid_setup_busy : std_logic;
+
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
     signal clk_1mhz_counter : integer range 0 to 15 := 0;
@@ -285,7 +289,10 @@ begin
         pal_wr_out   => vid_pal_wr,
         pal_ptr_out  => vid_pal_ptr,
         pal_lo_out   => vid_pal_lo,
-        pal_hi_out   => vid_pal_hi
+        pal_hi_out   => vid_pal_hi,
+
+        setup_req_out => vid_setup_req,
+        setup_busy_in => vid_setup_busy
     );
 
     video_test_inst : entity work.video_core
@@ -318,6 +325,9 @@ begin
         pal_ptr     => vid_pal_ptr,
         pal_lo      => vid_pal_lo,
         pal_hi      => vid_pal_hi,
+
+        setup_req   => vid_setup_req,
+        setup_busy  => vid_setup_busy,
 
         tmds_c0_p => hdmi_tmds_c0_p_out,
         tmds_c0_n => hdmi_tmds_c0_n_out,
