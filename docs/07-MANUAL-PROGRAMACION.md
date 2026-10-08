@@ -1324,7 +1324,7 @@ wait_setup:
 | Sprites | 32 en OAM | Más requeriría otro hardware |
 | Coordenada X | **9 bits (0-511)** | bit 8 en FLAGS(2) → cubre toda la pantalla |
 | Coordenada Y | 8 bits (0-255) | pantalla 240 → sobra |
-| Sprites por línea | **8** | Más → `OVERFLOW` y se pierde alguno |
+| Sprites por línea | **8 (máximo del chip)** | Más → `OVERFLOW` y se pierde alguno. **8 es un límite duro de este bitstream** (ver nota abajo) |
 | Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0) |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
 | Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores; **escribibles** por el CPU (§4.4) |
@@ -1337,6 +1337,13 @@ wait_setup:
 | Rotación de sprites | **no hay** | usar sprites pre-rotados |
 | Setup de VRAM (`$D816`) | limpia + re-expande fuente | ~120-275 µs; durante `BUSY` se ignoran escrituras CPU a VRAM/OAM |
 | Overscan del monitor | variable | las filas 0 y 29 pueden recortarse según el monitor |
+
+> **Sobre los 8 sprites por línea:** es un **límite duro de este bitstream** (chip
+> GW1NR-9), no una elección arbitraria. El line buffer de sprites ocupa registros
+> y el chip ya está al **~98% de CLS** (celdas lógicas). Subir a 9 o 10 sprites por
+> línea **no pasa el placement** de Gowin (`Failed to place with N REG(s)
+> unPlaced`). Para ampliarlo habría que **liberar CLS** de otro módulo (SD, SID,
+> UART) o migrar el line buffer a BSRAM (que también está al 100%).
 
 **Buenas prácticas:**
 

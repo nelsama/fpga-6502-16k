@@ -315,6 +315,8 @@ architecture rtl of video_core is
     --   Durante el blank se recolectan los sprites que cruzan la linea; luego,
     --   en el barrido visible, se comparan todos contra el pixel actual.
     --   Cada entrada: X, tile, paleta, fila (todo en registros).
+    --   NSL=8 es el MAXIMO que entra: el chip esta al ~98% de CLS y subir a 9
+    --   o 10 desborda el placement (REG sin colocar). Ver manual §13.
     -- ========================================================================
     constant NSL : integer := 8;   -- sprites maximos por linea
 
