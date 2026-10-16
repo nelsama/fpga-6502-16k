@@ -436,6 +436,7 @@ Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 
 - **Recursos:** ~6.400 celdas de lógica (74%), BSRAM de vídeo = 6/26 bloques, 2 DSP.
 
 > 📖 **Manual de programación (para juegos):** [`docs/07-MANUAL-PROGRAMACION.md`](docs/07-MANUAL-PROGRAMACION.md)
+> · **Tips de desarrollo:** [`docs/08-TIPS-DESARROLLO.md`](docs/08-TIPS-DESARROLLO.md)
 > · Arquitectura y detalles: [`docs/`](docs/README.md)
 
 ## 📌 FPGA Target

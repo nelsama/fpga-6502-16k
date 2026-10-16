@@ -14,6 +14,7 @@ Sipeed Tang Nano 9K (Gowin GW1NR-9).
 | 05 | [Análisis del Bitmap](05-ANALISIS-BITMAP.md) | Viabilidad, resoluciones, coste, decisión pendiente |
 | 06 | [Reporte del scroll](06-REPORTE-SCROLL.md) | Por qué costó, bug de raíz del video_bus, estado aparcado |
 | **07** | **[Manual de Programación](07-MANUAL-PROGRAMACION.md)** | **Guía para escribir juegos: registros, sprites, tiles, scroll, HUD, colisión, recetas y plantilla** |
+| **08** | **[Tips de Desarrollo](08-TIPS-DESARROLLO.md)** | **Advertencias y atajos aprendidos: software 6502, VHDL, recursos del chip y compilación** |
 
 ## Resumen ejecutivo
 
