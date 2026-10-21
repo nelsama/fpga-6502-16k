@@ -44,6 +44,8 @@ architecture arch of Board is
     signal system_clk,tmp_clk: std_logic := '0';
     signal r_w : std_logic;
     signal port1_ce,port2_ce,conf_p1_ce,conf_p2_ce,ram_ce: std_logic;
+    signal flags_ce : std_logic;
+    signal flag_user : std_logic := '0';   -- 1 flag persistente (C004 bit0)
     signal port_in1, port_in2 : std_logic_vector(7 downto 0) := "00000000";
     signal port_out1,port_out2 : std_logic_vector(7 downto 0);
     signal cfg_p1_reg,cfg_p2_reg: std_logic_vector(7 downto 0);
@@ -347,6 +349,7 @@ begin
             port2_ce <= '0';
             conf_p1_ce <= '0';
             conf_p2_ce <= '0';
+            flags_ce <= '0';
             ram_ce <= '0';
 
 
@@ -366,6 +369,10 @@ begin
                 conf_p2_ce <= '1';
             end if;
 
+            if addr_bus = x"C004" then
+                flags_ce <= '1';
+            end if;
+
             if (addr_bus >= x"0000") and (addr_bus <= x"3FFF") then
                 ram_ce <= '1';
             end if;
@@ -383,6 +390,7 @@ begin
         rom_data_bus_in=>rom_data_bus,
         port1_in=>port_in1,
         port2_in=>port_in2,
+        flags_in=>"0000000" & flag_user,
         video_data_bus_in=>vid_cpu_data_out,
         data_bus_out=>data_bus,
         rom_addr_out=>rom_addr_out
@@ -428,6 +436,20 @@ begin
             ce=>'1'
     );
 
+
+    -- Flag de usuario persistente en $C004 bit0 (R/W).
+    --   UN solo FF. NO se conecta al reset del sistema: sobrevive a un reset
+    --   por S1 y solo se pierde al recargar el bitstream. Pensado para
+    --   software que necesita conservar un bit de estado entre reinicios.
+    --   El resto de bits de $C004 se leen como 0.
+    flag_user_proc : process(system_clk)
+    begin
+        if falling_edge(system_clk) then
+            if (flags_ce = '1') and (r_w = '0') then
+                flag_user <= data_bus(0);
+            end if;
+        end if;
+    end process;
 
     port_sync: process(system_clk)
     begin
