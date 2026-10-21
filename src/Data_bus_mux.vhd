@@ -12,6 +12,7 @@ entity data_bus_mux is
             rom_data_bus_in : in std_logic_vector(7 downto 0);
             port1_in : in std_logic_vector(7 downto 0);
             port2_in : in std_logic_vector(7 downto 0);
+            flags_in : in std_logic_vector(7 downto 0);   -- flag de usuario $C004
             video_data_bus_in : in std_logic_vector(7 downto 0);  -- STATUS del video ($D803)
 
             rom_addr_out : out std_logic_vector(15 downto 0);  -- NUEVO: dirección para la ROM
@@ -62,7 +63,7 @@ begin
     rom_addr_out <= std_logic_vector(rom_physical_addr);
 
     -- === MULTIPLEXOR DE DATOS ===
-    process(clk, r_w, addr_in, ram_data_bus_in, rom_data_bus_in, port1_in, port2_in, video_data_bus_in)
+    process(clk, r_w, addr_in, ram_data_bus_in, rom_data_bus_in, port1_in, port2_in, flags_in, video_data_bus_in)
     begin
         if(falling_edge(clk)) then
             if ((addr_unsigned >= RAM_BASE) and (addr_unsigned <= RAM_END) and r_w='1') then 
@@ -81,6 +82,10 @@ begin
             elsif (addr_in = x"C001" and r_w='1') then 
                 -- Puerto 2
                 data_bus_out <= port2_in; 
+
+            elsif (addr_in = x"C004" and r_w='1') then 
+                -- Flag de usuario persistente (bit0)
+                data_bus_out <= flags_in; 
 
             elsif ((addr_in = x"D803" or addr_in = x"D817") and r_w='1') then
                 -- Registros de LECTURA del video:
