@@ -47,6 +47,7 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 | `$C001` | 1 byte | **Puerto 2** - Datos (bidireccional) |
 | `$C002` | 1 byte | **Config Puerto 1** (0=salida, 1=entrada) |
 | `$C003` | 1 byte | **Config Puerto 2** (0=salida, 1=entrada) |
+| `$C004` | 1 byte | **Flag de usuario** (bit 0 R/W, persistente al reset) |
 | `$C010 - $C017` | 8 bytes | **Registros I2C Master** |
 | `$C020 - $C023` | 4 bytes | **Registros UART** |
 | `$C030 - $C03F` | 16 bytes | **Timer de precisión** |
@@ -376,6 +377,34 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 ### Interfaz I2C
 - IP Core `I2C_MASTER_Top` de Gowin
 - Señal de interrupción disponible
+
+### Flag de usuario (`$C004`)
+
+Registro de **1 bit** (bit 0) de propósito general, pensado para que un SO o un
+programa conserve un dato de estado entre reinicios.
+
+| Dir | Bits | R/W | Función |
+|-----|------|-----|---------|
+| `$C004` | 0 | R/W | Flag de usuario |
+| `$C004` | 7-1 | R | Siempre leen 0 |
+
+- **No se resetea con S1**: su lógica no está conectada al reset del sistema,
+  así que el valor sobrevive a un reset por botón o por software.
+- **Sí se pierde al recargar el bitstream o al apagar** (los FF son volátiles;
+  arranca en 0).
+- Se lee y escribe como un registro normal:
+
+```asm
+    LDA #$01
+    STA $C004      ; activa el flag
+    ...
+    LDA $C004      ; bit 0 = estado del flag
+    AND #$01
+    BEQ flag_off
+```
+
+> Al escribir se guarda **solo el bit 0** del dato; el resto de bits se ignoran
+> al escribir y leen siempre 0.
 
 ### Sistema de Reset
 - Generador de power-on reset (50ms)

@@ -299,6 +299,7 @@ Comparación: NES = 25, C64 = 16, Master System = 32.
 | **`$4000–$7FFF`** | **16 KB** | **VRAM** | **NUEVO** |
 | `$8000–$BFFF` | 16 KB | ROM (programa) | Existente |
 | `$C000–$C003` | 4 B | GPIO | Existente |
+| **`$C004`** | **1 B** | **Flag de usuario (bit 0)** | **NUEVO** |
 | `$C010–$C017` | 8 B | I2C | Existente |
 | `$C020–$C023` | 4 B | UART | Existente |
 | `$C030–$C03F` | 16 B | Timer | Existente |
@@ -370,6 +371,45 @@ no hay banda superior y todo arranca en la banda media (equivale a 2 bandas).
 | 5 | **`SOLID_HIT`** | 1 = algún sprite tocó un tile sólido (colisión sprite↔tile, Fase 10) |
 | **4** | **`VIDEO_READY`** | 1 = inicialización de la VRAM terminada |
 | 3:0 | — | reservado |
+
+### 5.5 Flag de usuario (`$C004`) — IMPLEMENTADO
+
+Registro de **1 bit** de propósito general para que un SO o programa conserve
+un bit de estado entre reinicios.
+
+| Dir | Bits | R/W | Descripción |
+|-----|------|-----|-------------|
+| `$C004` | 0 | R/W | `USER_FLAG`: flag de usuario |
+| `$C004` | 7-1 | R | Siempre 0 |
+
+**Comportamiento frente al reset**
+
+| Evento | Efecto |
+|--------|--------|
+| Reset por botón S1 | **No se modifica** (no está en el dominio de reset) |
+| Reset por software | **No se modifica** |
+| Recargar bitstream | Se reinicia a **0** (FF volátil) |
+| Apagar y encender | Se reinicia a **0** |
+
+**Escritura**: guarda únicamente el **bit 0** de `data_in`; los demás se ignoran.
+**Lectura**: devuelve el flag en el bit 0 y 0 en los bits 7-1.
+
+```asm
+    LDA #$01
+    STA $C004      ; activa el flag
+
+    LDA $C004      ; leer
+    AND #$01
+    BEQ flag_off
+```
+
+**Notas de implementación** (`src/Board.vhd`):
+
+- Un solo flip-flop escrito en el flanco de bajada de `system_clk` cuando
+  `flags_ce='1'` y `r_w='0'`.
+- El proceso **no incluye `rst_n`**, de ahí que sobreviva al reset.
+- La lectura se resuelve en `src/Data_bus_mux.vhd`.
+- No guarda relación con el timer ni con ningún otro periférico.
 
 ---
 

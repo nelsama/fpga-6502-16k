@@ -172,6 +172,33 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 - El OAM **no tiene “dirección de patrón”: son registros sueltos**, no un array 2D;
   su dirección es simplemente el índice de byte (0..159).
 
+### 2.5 Registros de sistema: flag de usuario (`$C004`)
+
+Aparte del área de vídeo, el CPU dispone de un registro de propósito general en
+`$C004`:
+
+| Dir | Bits | R/W | Descripción |
+|-----|------|-----|-------------|
+| `$C004` | 0 | R/W | `USER_FLAG`: 1 bit libre para el programa/SO |
+| `$C004` | 7-1 | R | Siempre leen 0 |
+
+**Característica principal:** **no se resetea con S1** ni con un reset por software,
+porque su lógica no está unida al reset del sistema. Solo vuelve a 0 al recargar el
+bitstream o al apagar la placa.
+
+```asm
+    LDA #$01
+    STA $C004      ; activa el flag
+
+    LDA $C004      ; leer: bit 0 = estado
+    AND #$01
+    BEQ flag_off
+```
+
+> Al escribir solo se guarda el **bit 0**; el resto de bits se ignoran.
+> Para el mapa de memoria completo del sistema (RAM, ROM, GPIO, I2C, UART, timer,
+> SPI, SID), consulta `03-FORMATOS-Y-MEMORIA.md` §5.
+
 ---
 
 ## 3. Resolución, coordenadas y unidades
