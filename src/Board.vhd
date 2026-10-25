@@ -297,7 +297,7 @@ begin
         setup_busy_in => vid_setup_busy
     );
 
-    video_test_inst : entity work.video_core
+    video_core_inst : entity work.video_core
     port map (
         clk_27      => CLOCK_27_i,
         rst_n       => reset,
