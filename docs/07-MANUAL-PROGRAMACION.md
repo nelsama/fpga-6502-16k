@@ -531,6 +531,21 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 > ⚠️ **Rango del campo `TILE` del OAM:** el byte `TILE` (+2) es de **6 bits (0..63)**
 > y el banco tiene **64 patrones**. Usa **TILE = 0..63** para seleccionar el patrón.
 
+> ⚠️ **Los patrones 0-2 los escribe el arranque del core.** Al encender, la
+> secuencia de inicialización graba en los patrones 0, 1 y 2 tres formas de demo
+> (cara, rombo, X). Si pides un setup por `$D816`, esas mismas posiciones quedan
+> **a cero**. Son patrones **reservados por el sistema**: si los usas, verás esas
+> formas (o nada) en vez de tu dibujo.
+>
+> **Rango recomendado para tu arte: 3..63.** El resto de la inicialización (la
+> expansión de la fuente) escribe en el banco de **fondo**, no en el de sprite,
+> así que los patrones **3..63 no los toca nadie**.
+
+| Patrones | Quién los escribe |
+|---|---|
+| **0-2** | El arranque del core (formas de demo) o el setup `$D816` (ceros) |
+| **3-63** | Solo tu programa |
+
 ### 6.1 Estructura (5 bytes por sprite)
 
 | Offset | Campo |
@@ -545,7 +560,8 @@ Los sprites usan un **banco aparte** del de fondo. Su tamaño y direccionamiento
 
 - `PRIO=1` → sprite **detrás** del fondo (sólo se ve en huecos del fondo).
 - `PRIO=0` → sprite **delante** del fondo.
-- `SCALE2X=1` → sprite dibujado al doble (16×16 en pantalla).
+- `SCALE2X=1` → sprite dibujado al doble (16×16 en pantalla), **duplicando los
+  píxeles de un único patrón**. No compone 4 patrones: ver §6.2b y §13.
 - **`X_bit8` (bit 2)** = bit 8 de la coordenada X → permite X de **0 a 511**
   (toda la pantalla, 0-319). Ver §6.2.
 - Prioridad entre sprites: **menor índice de OAM gana**.
@@ -582,6 +598,47 @@ Ejemplos:
     LDA XLO : STA $D802   ; (tras poner addr al byte X)
     ; FLAGS = (XHI<<2) | flags/paleta
 ```
+
+### 6.2b Escalado 2× (`SCALE2X`)
+
+El bit 4 de `FLAGS` activa el escalado 2×. **Escala en los dos ejes**: un sprite
+8×8 pasa a ocupar **16×16 píxeles** en pantalla.
+
+**Lo que hace exactamente:** cada píxel del patrón se dibuja como un bloque de
+2×2. Se sigue leyendo **un solo patrón** (el del campo `TILE`), y cada fila y
+cada columna se repiten dos veces.
+
+| | Ancho en pantalla | Patrón leído |
+|---|---|---|
+| `SCALE2X=0` | 8 px | `TILE` |
+| `SCALE2X=1` | 16 px | `TILE` (el mismo) |
+
+> ⚠️ **No compone 4 patrones.** No lee `TILE+1`, `TILE+2` ni `TILE+3`. Un
+> `SCALE2X` **no** es un "sprite grande" hecho de cuadrantes: es el mismo dibujo
+> ampliado. Como el banco solo tiene 64 patrones, no hay sitio para componer 4
+> por sprite.
+
+**Qué usar según el caso:**
+
+| Quieres | Cómo |
+|---|---|
+| El mismo dibujo al doble | `SCALE2X=1`, 1 sprite |
+| Un dibujo de 16×16 **distinto** (4 patrones) | **4 sprites** de 8×8, sin `SCALE2X` |
+| Un dibujo de 32×32 | 16 sprites de 8×8 |
+| Efecto pixel-art "gordo" en 2× | `SCALE2X=1` |
+
+**Efecto en la colisión:** si el sprite es 2×, `COLL_POINT` se escala solo
+(`dx 0-7 → 0-15`). Tú sigues escribiendo dx/dy en escala 0-7. Ver §10.3.
+
+```asm
+; mismo dibujo (patron 9) al doble: ocupa 16x16 desde (X,Y)
+    LDA #$10          ; FLAGS: bit4 = SCALE2X
+    STA $D802
+```
+
+**Coste:** el `SCALE2X` se resuelve **dentro del line buffer**, sin sprites ni
+patrones extra. Pero el sprite 2× sigue ocupando **1 de los 8 huecos por
+línea** (§13), no 4.
 
 ### 6.3 Escribir un campo del OAM
 
@@ -1355,12 +1412,13 @@ wait_setup:
 | Coordenada X | **9 bits (0-511)** | bit 8 en FLAGS(2) → cubre toda la pantalla |
 | Coordenada Y | 8 bits (0-255) | pantalla 240 → sobra |
 | Sprites por línea | **8 (máximo del chip)** | Más → `OVERFLOW` y se pierde alguno. **8 es un límite duro de este bitstream** (ver nota abajo) |
-| Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0) |
+| Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0). **0-2 los escribe el arranque** (ver nota abajo) |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
 | Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores; **escribibles** por el CPU (§4.4) |
 | Colores en pantalla | hasta 32 | 16 de fondo (4 paletas × 4) + 16 de sprite |
 | Mapa | 64×32 | scroll con envoltura |
 | Framebuffer | **no hay** | los píxeles se generan al vuelo |
+| `SCALE2X` | **duplica píxeles** | 8×8 → 16×16 con un **único** patrón (no compone 4). Ver nota abajo |
 | Colisión sprite↔sprite | **no hay** | hacer por software (comparar X/Y) |
 | Colisión sprite↔tile | flag **global** | no dice qué sprite; deducir por software |
 | COLL_POINT | dx, dy **0-7** | auto-escala a 0-15 si el sprite es 2× |
@@ -1374,6 +1432,21 @@ wait_setup:
 > línea **no pasa el placement** de Gowin (`Failed to place with N REG(s)
 > unPlaced`). Para ampliarlo habría que **liberar CLS** de otro módulo (SD, SID,
 > UART) o migrar el line buffer a BSRAM (que también está al 100%).
+
+> **Sobre los patrones de sprite 0-2:** el arranque del core los **sobrescribe**
+> con tres formas de demo (cara, rombo, X). Si pides un setup por `$D816`, en su
+> lugar quedan **a cero**. Son patrones **del sistema**, no libres: si los usas,
+> se verán con esas formas o transparentes. Usa los patrones **3-63** para tu
+> propio arte. El resto de la secuencia de init **no toca** los patrones 3-63;
+> la expansión de la fuente escribe en los patrones de **fondo**, no en los de
+> sprite.
+
+> **Sobre `SCALE2X`:** es **duplicación de píxeles**, no composición. Un sprite
+> con el bit 4 de FLAGS activo se dibuja a **16×16** leyendo **un único patrón**
+> (cada fila y cada columna se repite). **No** lee `patron+1`, `+2` ni `+3`: no
+> hay "sprites grandes" de 4 cuadrantes en hardware. Para un personaje de 16×16
+> real (4 patrones distintos) hay que usar **4 sprites** de 8×8, que además
+> admite cualquier tamaño por composición.
 
 **Buenas prácticas:**
 

@@ -32,7 +32,8 @@ eliminar ningún módulo existente.
 
 **Estado: COMPLETO** ✅ — Fases 1–12 implementadas y validadas en hardware.
 El motor de vídeo soporta tiles multicolor, fondo transparente, sprites (line buffer,
-prioridad, flips X/Y, **escalado 2×**, **X de 9 bits**), STATUS (vblank/overflow/
+prioridad, flips X/Y, **escalado 2× por duplicación de píxeles**, **X de 9 bits**),
+STATUS (vblank/overflow/
 solid-hit/ready), **modo texto con fuente en BSRAM**, **scroll H/V** sobre mapa 64×32,
 **split de raster (3 bandas)**, y **colisión sprite↔tile sólido** con punto de
 colisión configurable y auto-escala 1×/2×.

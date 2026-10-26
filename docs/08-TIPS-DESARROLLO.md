@@ -96,6 +96,24 @@ horizontal, se activa `OVERFLOW` (bit 6 de `$D803`) y **algunos no se dibujan**
 El campo TILE del OAM es de **6 bits** → patrones 0-63. Si necesitas más gráficos,
 reutiliza o cambia patrones por escena (recargando la VRAM en el blank o con el setup).
 
+> ⚠️ **Evita los patrones 0-2.** El arranque del core los sobrescribe con formas de
+> demo (cara, rombo, X), o con ceros si haces un setup `$D816`. Usa **3..63** para tu
+> arte. Los 3..63 no los toca nada excepto tu programa.
+
+### 1.8b `SCALE2X` duplica píxeles, no compone cuadrantes
+
+El bit 4 de `FLAGS` escala el sprite a **16×16**, pero leyendo **un único patrón**:
+cada fila y columna sale dos veces. **No** lee `TILE+1/+2/+3`, así que no sirve para
+armar un dibujo de 16×16 con 4 patrones distintos.
+
+| Quieres | Cómo |
+|---|---|
+| El mismo dibujo al doble | `SCALE2X=1`, **1** sprite |
+| Un dibujo 16×16 distinto | **4** sprites de 8×8, sin `SCALE2X` |
+
+> Si numeras los patrones en pares o cuádruples esperando que `SCALE2X` los componga,
+> verás el primer patrón duplicado y el resto sin usar. Detalle en manual §6.2b.
+
 ### 1.9 Bordes: no pongas info crítica en filas 0 y 29
 
 Por **overscan** del monitor/TV, las filas superior e inferior pueden recortarse.
