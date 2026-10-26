@@ -350,6 +350,9 @@ parpadeos, paletas por nivel, etc.
   - Sprite: entradas 16-31 → paleta 0 = 16-19, paleta 1 = 20-23, etc.
 - **`PAL_PTR` avanza solo** al escribir `$D815`, así que para cargar una paleta
   completa pones el puntero **una vez** y encadenas escrituras.
+- **El auto-incremento satura en 31**: tras escribir la entrada 31 el puntero se
+  queda ahí y no vuelve a 0. Las 32 entradas son alcanzables, y reescribir la 31
+  no toca ninguna otra. Para volver a empezar hay que recargar `$D813`.
 - Formato del color: **RGB444**, un nibble por canal. Ej.: `$F80` = rojo F, verde 8,
   azul 0 = naranja `#FF8800`.
 
@@ -1505,7 +1508,7 @@ byte_oam   = sprite*5 + campo            (campo 0..4)
 | Dir | R/W | Uso |
 |-----|-----|-----|
 | `$D803` | R | STATUS del vídeo: VBLANK(7), OVERFLOW(6), SOLID_HIT(5), VIDEO_READY(4) |
-| `$D813/$D814/$D815` | W | Paleta (PTR / LO / HI); HI escribe y `PTR++`. Entrada 15 = `BG_COLOR` |
+| `$D813/$D814/$D815` | W | Paleta (PTR / LO / HI); HI escribe y `PTR++` (satura en 31). Entrada 15 = `BG_COLOR` |
 | `$D816` | W | **Setup de VRAM** (escribir cualquier valor lo dispara) |
 | `$D817` | R | Estado del setup: BUSY(0), VIDEO_READY(4) |
 

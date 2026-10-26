@@ -235,7 +235,8 @@ Paletas: 32 entradas × 12 bits (RGB 4-4-4), en registros (escribibles por CPU)
   └── Paletas de SPRITE: 4 paletas × 4 colores = 16 entradas (pal_spr)
 ```
 
-> El CPU las reescribe por el puerto indirecto `$D813-$D815` (auto-incremento).
+> El CPU las reescribe por el puerto indirecto `$D813-$D815` (auto-incremento que
+> satura en 31).
 > Entrada = `paleta*4 + color` dentro de su banco (0-15 fondo, 16-31 sprite).
 
 ### 4.2 Bancos separados (decisión de diseño)

@@ -93,6 +93,9 @@ entity video_bus is
         --   $D813 = PAL_PTR  (puntero 0..31: 0-15 fondo, 16-31 sprite)
         --   $D814 = PAL_LO   (color[7:0])
         --   $D815 = PAL_HI   (color[11:8] en bits 3:0) -> escribe y ptr++
+        --   El auto-incremento SATURA en 31 (no vuelve a 0). Tras escribir la
+        --   entrada 31 el puntero queda en 31: reescribirla no toca otras entradas.
+        --   Para volver a empezar hay que recargar $D813.
         pal_wr_out  : out std_logic;                     -- pulso (dominio CPU->video)
         pal_ptr_out : out std_logic_vector(4 downto 0);
         pal_lo_out  : out std_logic_vector(7 downto 0);
@@ -331,10 +334,16 @@ begin
 
                 -- Escritura de PAL_HI ($D815): en el PRIMER ciclo -> latchear
                 -- el puntero actual y el color, disparar el toggle y auto-incrementar.
+                -- El puntero es de 5 bits (0..31): 0-15 fondo, 16-31 sprite. El
+                -- auto-incremento SATURA en 31 en vez de desbordar a 0; envolver
+                -- haria que la entrada 31 fuese inalcanzable y que la escritura
+                -- siguiente pisara pal_bg(0) (= BG_COLOR).
                 if (pal_active = '1') and (pal_active_d = '0') then
                     pal_hi_r  <= cpu_data_in(3 downto 0);  -- color[11:8]
                     pal_ptr_s <= pal_ptr_r;               -- puntero de esta entrada
-                    pal_ptr_r <= std_logic_vector(unsigned(pal_ptr_r) + 1);
+                    if pal_ptr_r /= "11111" then
+                        pal_ptr_r <= std_logic_vector(unsigned(pal_ptr_r) + 1);
+                    end if;
                     pal_req   <= not pal_req;             -- toggle: UNA vez
                 end if;
                 pal_active_d <= pal_active;

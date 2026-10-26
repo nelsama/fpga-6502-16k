@@ -89,7 +89,8 @@ El CPU controla el motor de video (tiles + sprites, estilo NES/VIC-II) por un
 
 **Paletas escribibles** (`$D813-$D815`): 32 entradas de 12 bits (RGB444), 16 de fondo
 + 16 de sprite. Escribir `$D814` y luego `$D815` carga la entrada apuntada y avanza
-el puntero. **BG_COLOR = la entrada 15 de la paleta de fondo** (`$D813=15`).
+el puntero (satura en 31, no vuelve a 0). **BG_COLOR = la entrada 15 de la paleta de
+fondo** (`$D813=15`).
 
 **Setup de video por hardware** (`$D816`): escribe cualquier valor para limpiar la
 VRAM (tilemap, atributos, patrones, sprites) y **re-expandir la fuente de texto**,
