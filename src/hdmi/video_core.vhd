@@ -1025,9 +1025,11 @@ begin
     --     celda = ((punto_x + scroll_x)/8 mod 64) + ((punto_y + scroll_y)/8 mod 32)*64
     --   El SCROLL se aplica igual que en el dibujado (x0_world/y0_world), para que
     --   el punto de colision caiga sobre la MISMA celda que se ve en pantalla.
-    --   LIMITACION: se usa el scroll NORMAL (sc_x_in/sc_y_in, banda MEDIA). Con
-    --   split de raster activo, un sprite en una banda superior o inferior
-    --   colisiona contra la celda del scroll normal, no el de su banda.
+    --   LIMITACION: el barrido usa la senal scroll_x/scroll_y, que es UNICA y se
+    --   reescribe en cada transicion de banda (ver el proceso de bandas). Al correr
+    --   en VBLANK, su valor es el de la ULTIMA banda dibujada (la INFERIOR si hay
+    --   split). Con split de raster y sprites repartidos entre bandas, solo aciertan
+    --   los de esa ultima banda. Sin split (scroll unico) la colision es exacta.
     --   Si SCALE2X esta activo, (dx,dy) se escalan a 0..15 (7 -> 15).
     --   NO se filtra por Y: se recorren los 32 sprites aunque Y >= 248, asi que
     --   un sprite "deshabilitado" para dibujar SI puede activar SOLID_HIT.

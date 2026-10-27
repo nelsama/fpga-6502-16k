@@ -1077,10 +1077,19 @@ tilemap. Para cambiar el color de un texto, escribe el **atributo** de la celda:
   pantalla. Con scroll, un punto fuera del área visible apunta a la celda del mapa
   que tocaría ver; sin scroll, puede caer fuera de las 40 columnas visibles.
 
-> ⚠️ **Limitación con split de raster:** la colisión usa siempre el scroll **normal**
-> (`$D804`/`$D806`, el de la banda MEDIA). Si usas bandas (§8) y el sprite está en la
-> banda superior o inferior, la colisión se evalúa con el scroll equivocado. Para
-> usar `SOLID_HIT` de forma fiable, no actives el split de raster.
+> ⚠️ **Limitación con split de raster (§8):** el hardware tiene **un solo** par
+> `scroll_x`/`scroll_y`, que se reescribe en cada transición de banda. El barrido de
+> colisión corre en el VBLANK, **un único instante**, y usa el valor que quedó tras
+> dibujar la **última banda** de la pantalla (la INFERIOR si hay split).
+>
+> Como los 32 sprites pueden estar repartidos entre las tres bandas, y cada banda
+> tiene su propio scroll, **no hay un único scroll correcto para todos**. Resultado:
+> con split activo, solo los sprites de la última banda colisionan bien; los de las
+> demás lo hacen contra la celda que les correspondería con el scroll de esa última
+> banda.
+>
+> **Recomendación:** no combines `SOLID_HIT` con split de raster. Sin split (scroll
+> único) la colisión es exacta.
 
 ### 10.2 Marcar una celda sólida
 
@@ -1484,7 +1493,7 @@ wait_setup:
 | Colisión sprite↔sprite | **no hay** | hacer por software (comparar X/Y) |
 | Colisión sprite↔tile | flag **global** | no dice qué sprite; deducir por software |
 | COLL_POINT | dx, dy **0-7** | auto-escala a 0-15 si el sprite es 2× |
-| Colisión y scroll | usa el scroll **normal** | con split de raster, las bandas superior/inferior no se respetan (§10.1) |
+| Colisión y scroll | usa el scroll de la **última banda** dibujada | con split de raster solo acierta en esa banda; no mezclar con `SOLID_HIT` (§10.1) |
 | Rotación de sprites | **no hay** | usar sprites pre-rotados |
 | Setup de VRAM (`$D816`) | limpia + re-expande fuente | ~120-275 µs; durante `BUSY` se ignoran escrituras CPU a VRAM/OAM |
 | Overscan del monitor | variable | las filas 0 y 29 pueden recortarse según el monitor |
