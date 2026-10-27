@@ -1022,18 +1022,23 @@ begin
     --   momento en el que el fondo no dibuja y el puerto B de atributos esta libre.
     --   Para cada sprite (0..31):
     --     punto = (sx + dx, sy + dy)   con (dx,dy) = COLL_POINT (byte +4 del OAM)
-    --     celda = (punto_x/8) + (punto_y/8)*64
+    --     celda = ((punto_x + scroll_x)/8 mod 64) + ((punto_y + scroll_y)/8 mod 32)*64
+    --   El SCROLL se aplica igual que en el dibujado (x0_world/y0_world), para que
+    --   el punto de colision caiga sobre la MISMA celda que se ve en pantalla.
+    --   LIMITACION: se usa el scroll NORMAL (sc_x_in/sc_y_in, banda MEDIA). Con
+    --   split de raster activo, un sprite en una banda superior o inferior
+    --   colisiona contra la celda del scroll normal, no el de su banda.
     --   Si SCALE2X esta activo, (dx,dy) se escalan a 0..15 (7 -> 15).
     --   NO se filtra por Y: se recorren los 32 sprites aunque Y >= 248, asi que
     --   un sprite "deshabilitado" para dibujar SI puede activar SOLID_HIT.
-    --   La celda tampoco se recorta a la pantalla: X de 9 bits y Y de 8 desbordan
-    --   (Y=255 con dy=7 da 262 & 0xFF = 6 -> fila 0).
     --   La BSRAM de atributo tiene 1 ciclo de latencia: se pide en el ciclo N y
     --   se captura el resultado en N+1.
     -- ========================================================================
     process (clk_pixel)
         variable csx : unsigned(8 downto 0);   -- punto X de 9 bits (0..319+)
         variable csy : unsigned(7 downto 0);
+        variable cwx : unsigned(10 downto 0);  -- punto X de MUNDO (pantalla+scroll)
+        variable cwy : unsigned(10 downto 0);  -- punto Y de MUNDO (pantalla+scroll)
         variable xce : unsigned(5 downto 0);
         variable yce : unsigned(4 downto 0);
         variable sdx : unsigned(2 downto 0);
@@ -1103,8 +1108,13 @@ begin
                         end if;
                         csx := to_unsigned(ox, 9) + resize(pdx, 9);
                         csy := to_unsigned(oy, 8) + resize(pdy, 8);
-                        xce := resize(csx srl 3, 6);  -- celda X /8 (6 bits, 0..63)
-                        yce := resize(csy srl 3, 5);  -- celda Y /8 (5 bits, 0..31)
+                        -- paso a coordenadas de MUNDO: se suma el scroll igual que
+                        -- en el dibujado (x0_world/y0_world), para que la celda
+                        -- leida sea la que realmente se ve bajo el punto.
+                        cwx := resize(csx, 11) + scroll_x;
+                        cwy := resize(csy, 11) + scroll_y;
+                        xce := resize(cwx(10 downto 3) mod 64, 6);  -- celda X /8 (0..63)
+                        yce := resize(cwy(10 downto 3) mod 32, 5);  -- celda Y /8 (0..31)
                         -- celda = y_celda * 64 + x_celda
                         coll_addr <= yce & xce;
                         coll_pending <= '1';
