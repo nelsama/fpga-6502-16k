@@ -1070,9 +1070,17 @@ tilemap. Para cambiar el color de un texto, escribe el **atributo** de la celda:
   siguiente VBLANK.
 - **No hay filtro por `Y`:** el barrido recorre los **32 sprites**, incluidos los que
   están en `Y ≥ 248` (que sí están deshabilitados para *dibujar*, ver §6.1).
-- **No hay recorte a la pantalla:** la celda puede caer fuera del área visible, o
-  incluso envolver de la fila 31 a la fila 0 si el sprite está en `Y ≈ 255`
-  (ver §10.3).
+- **El scroll SÍ se aplica** (desde v2.9): el barrido suma `scroll_x`/`scroll_y` a la
+  posición del sprite antes de calcular la celda, exactamente igual que el dibujado.
+  El punto de colisión cae sobre la **misma celda que se ve en pantalla**.
+- **No hay recorte a la pantalla:** la celda es la del **mapa** (64×32), no la de la
+  pantalla. Con scroll, un punto fuera del área visible apunta a la celda del mapa
+  que tocaría ver; sin scroll, puede caer fuera de las 40 columnas visibles.
+
+> ⚠️ **Limitación con split de raster:** la colisión usa siempre el scroll **normal**
+> (`$D804`/`$D806`, el de la banda MEDIA). Si usas bandas (§8) y el sprite está en la
+> banda superior o inferior, la colisión se evalúa con el scroll equivocado. Para
+> usar `SOLID_HIT` de forma fiable, no actives el split de raster.
 
 ### 10.2 Marcar una celda sólida
 
@@ -1116,27 +1124,27 @@ tilemap. Para cambiar el color de un texto, escribe el **atributo** de la celda:
 > Al escribir siempre dx/dy en escala 0-7 obtienes el mismo punto lógico en ambas
 > escalas; el hardware hace la conversión.
 
-#### Sin recorte a la pantalla, y desbordamiento
+#### Sin recorte a la pantalla
 
-El punto se calcula en el dominio de la pantalla **y la celda se toma después**, sin
-comprobar que esté dentro de los 320×240 visibles:
+El punto se calcula en el dominio de la pantalla, se le **suma el scroll** y **después**
+se toma la celda, sin comprobar que el punto esté dentro de los 320×240 visibles:
 
-- **Sin recorte horizontal:** la pantalla tiene 40 columnas (0-39), pero el mapa
-  tiene 64. Un sprite en `X = 316` con `dx = 7` da punto 323 → **celda 40**, que está
-  **fuera de pantalla pero es una celda válida del mapa**. Si ahí hay algo sólido,
-  el sprite “colisiona” sin que se vea nada.
-- **Desbordamiento vertical:** `X` es de **9 bits** pero `Y` de **8**. La suma envuelve:
+- **Horizontalmente:** la pantalla tiene 40 columnas, pero el mapa tiene 64. Sin
+  scroll, un sprite en `X = 316` con `dx = 7` da punto 323 → **celda 40**, fuera de
+  pantalla pero válida en el mapa. Si ahí hay algo sólido, el sprite “colisiona” sin
+  que se vea nada. Con scroll, el envolvente es el propio mapa (64 columnas).
+- **Verticalmente:** el mapa tiene 32 filas y `Y` es de 8 bits, así que la suma
+  envuelve módulo 256 en lugar de saturar:
 
-| Sprite | `COLL_POINT` | Punto | Celda resultante |
-|--------|--------------|-------|------------------|
-| `Y = 240` | `$3F` (15,15) | (15, 255) | fila 31 (correcto) |
-| `Y = 248` | `$24` (4,4) | (4, 252) | fila 31 (correcto) |
-| `Y = 255` | `$27` (7,7) | (7, **6**) | fila **0** ← **envuelve** |
+| Sprite | `COLL_POINT` | Punto (pantalla) | `+scroll_y` | Celda |
+|--------|--------------|------------------|-------------|-------|
+| `Y = 240` | `$3F` (15) | 255 | `255+s` | `(255+s)/8 mod 32` |
+| `Y = 255` | `$27` (7) | **6** ← envuelve | `6+s` | fila de `6+s` |
 
-> ⚠️ Es consecuencia de la aritmética módulo del hardware, **no un bug**: `255 + 7`
-> da `262 & 0xFF = 6`. Un sprite que sale por abajo puede colisionar con una celda
-> sólida de la **fila superior**. Si un sprite va a salir de pantalla, no confíes en
-> su `SOLID_HIT`.
+> ⚠️ `255 + 7 = 262`, que en 8 bits es **6**. Esto ocurre **antes** de sumar el
+> scroll, así que no lo corrige: un sprite que sale por abajo (punto > 255) puede
+> colisionar con una celda de la **fila superior** del mapa. Si un sprite va a salir
+> de pantalla, no confíes en su `SOLID_HIT`.
 
 ### 10.4 Patrón de uso (varios sprites: deducción en software)
 
@@ -1476,6 +1484,7 @@ wait_setup:
 | Colisión sprite↔sprite | **no hay** | hacer por software (comparar X/Y) |
 | Colisión sprite↔tile | flag **global** | no dice qué sprite; deducir por software |
 | COLL_POINT | dx, dy **0-7** | auto-escala a 0-15 si el sprite es 2× |
+| Colisión y scroll | usa el scroll **normal** | con split de raster, las bandas superior/inferior no se respetan (§10.1) |
 | Rotación de sprites | **no hay** | usar sprites pre-rotados |
 | Setup de VRAM (`$D816`) | limpia + re-expande fuente | ~120-275 µs; durante `BUSY` se ignoran escrituras CPU a VRAM/OAM |
 | Overscan del monitor | variable | las filas 0 y 29 pueden recortarse según el monitor |
