@@ -3,130 +3,89 @@
 **Desde:** `fpga-6502-16k` (core de vídeo)
 **Para:** `EmuladorFpga6502`
 **Fecha:** 2026-10-27
-**Referencia core:** `57774ed`
+**Referencia core:** `57774ed`, `0633341`
 **Referencia emulador:** `1583eb2`
 
 ---
 
-## Resumen
+## Estado: RETIRADO — no hay desfase. No hay nada que cambiar.
 
-Antes de nada: **la corrección de `1583eb2` es correcta**. Adopta bien la explicación
-del core sobre el split de raster, tanto en `GUIA-USO.md` como en el comentario de
-`Video::barrido_colision()`. Nada que objetar ahí.
+Este informe declaraba que el dibujado del emulador se desviaba del RTL con
+`scroll_y >= 256`, porque el emulador envuelve a 8 bits y el RTL a 11. **El
+diagnóstico era incorrecto.** Verificado con la aritmética del RTL sobre todo el
+rango, las dos implementaciones **coinciden siempre**.
 
-Revisando ese cambio apareció otra cosa, esta vez en el **dibujado** y no en la
-colisión: el scroll vertical se envuelve a **8 bits** donde el RTL lo hace a **11**.
-Afecta solo a `scroll_y > 255`, que el manual declara fuera de rango — así que la
-severidad es baja, pero conviene decidirlo explícitamente en vez de dejarlo al azar.
+Se deja el documento archivado para que no se reabra el tema, con la
+demostración que lo descarta.
 
 ---
 
-## El desfase
+## El error que contenía la versión anterior
 
-**`src/video/video.cpp`, dibujado del fondo (~línea 446):**
+La tabla original marcaba como discrepancia estos casos:
 
-```cpp
-int map_y = (py + band_scroll_y) & 0xFF; // envuelve módulo 256 (32 tiles × 8)
-int tile_row = (map_y / TILE_H) & (MAP_H - 1);
-int pix_y = map_y % TILE_H;
+| `scroll_y` | Lo que decía el informe | Lo correcto |
+|---|---|---|
+| 260 | ⚠️ No coinciden | ✅ Coinciden |
+| 2047 | ⚠️ No coinciden | ✅ Coinciden |
+
+El razonamiento fallaba al comparar expresiones sin evaluarlas. Como
+`256 / 8 = 32` y el mapa tiene exactamente **32 filas de tiles**, sumar 256 px
+desplaza la fila justo un número entero de vueltas al mapa. El `mod 32` lo
+absorbe por completo.
+
+Lo mismo con los bits bajos: 256 es múltiplo de 8, así que el desplazamiento
+dentro del tile (`& 7`) tampoco cambia.
+
+---
+
+## Demostración
+
+Para `py` (línea de pantalla) y `scroll_y` arbitrarios:
+
+```text
+RTL : y0_world = (py + scroll_y) mod 2048
+      fila  = (y0_world / 8) mod 32
+      pixel = y0_world & 7
+
+emulador : map_y = (py + scroll_y) mod 256
+           fila  = (map_y / 8) mod 32
+           pixel = map_y & 7
 ```
 
-**`src/hdmi/video_core.vhd` (RTL), líneas 586 y 597:**
+Para todo `k`, `scroll_y = 256k + r` con `0 <= r < 256`:
 
-```vhdl
-y0_world <= resize(y0_log, 11) + scroll_y;   -- 11 bits, 0..2047
-...
-y_cell   <= y0_world(10 downto 3) mod 32;
-row_t1   <= y0_world(2 downto 0);
-```
+- `(py + scroll_y) mod 256 = (py + r) mod 256` → **mismo `map_y`**;
+- de ahí, mismas `fila` y `pixel`.
 
-El hardware suma en **11 bits** y envuelve **al tomar la celda** (`mod 32`). El
-emulador envuelve a **8 bits antes** de dividir.
+La única diferencia entre ambos sería el valor intermedio de `y0_world`, que el
+RTL nunca usa fuera de `mod 32` y `& 7`. **Ningún píxel cambia.**
 
-Para `scroll_y ≤ 255` los dos coinciden. La diferencia aparece solo con
-`scroll_y ≥ 256`, que solo es alcanzable escribiendo los bits 2:0 de `$D807`.
+### Barrido exhaustivo
 
-**Nótese que el barrido de colisión sí lo hace bien** (líneas ~276):
-
-```cpp
-const int wy = (py + scy) & 0x7FF;   // 11 bits, igual que el RTL
-```
-
-Es decir: las dos rutas del emulador no usan el mismo ancho para el scroll vertical.
+Se evaluó `scroll_y` en `{0, 1, 256, 260, 511, 512, 1024, 2047}` cruzado con
+`py` en `{0, 5, 160, 239}`: **0 discrepancias** en fila y píxel.
 
 ---
 
-## Qué hace realmente el hardware con `scroll_y >= 256`
+## Lo que sí es cierto (y ya está en ambos manuales)
 
-Consultado el RTL, **los bits altos no se ignoran**: entran en la suma de 11 bits y
-el `mod 32` los absorbe. `scroll_y = 256` equivale a `scroll_y = 0` para la fila de
-celda, **pero no para el desplazamiento dentro del tile**, porque `row_t1` sale de
-`y0_world(2 downto 0)`.
+- El hardware **no descarta** los bits altos: los suma en 11 bits y el módulo del
+  mapa los absorbe. El manual del core lo explica así desde `0633341` (§7.1).
+- El resultado **práctico** coincide con escribir el valor reducido, porque 512 y
+  256 son múltiplos del tamaño de tile.
 
-La diferencia práctica es pequeña (256 es múltiplo de 32, así que cae en el mismo
-límite de tile), pero el comportamiento exacto del hardware está en la aritmética de
-11 bits, no en un recorte a 8.
-
----
-
-## Casos concretos
-
-| `scroll_y` | RTL (11 bits) | Emulador (8 bits) | ¿Coinciden? |
-|---|---|---|---|
-| 0..255 | normal | normal | ✅ Sí |
-| 256 | `y0_world = py+256` → fila `(py+256)/8 mod 32` | `(py+0) & 0xFF` → fila `py/8` | ✅ Sí (256 es múltiplo de 32) |
-| 260 | fila `(py+260)/8 mod 32`, píxel `(py+260)&7` | fila `(py+4)/8`, píxel `(py+4)&7` | ⚠️ **No** |
-| 2047 | fila `(py+2047)/8 mod 32` | fila `(py+255)/8` | ⚠️ **No** |
+Es decir: el comportamiento observable es el mismo, pero la descripción correcta
+es «se suma y el módulo lo absorbe», no «se ignoran».
 
 ---
 
-## Opciones
+## Conclusión
 
-### A. Alinear el emulador con el RTL
+No hay que aplicar la Opción A ni la B: **el emulador ya es fiel al RTL** en el
+scroll vertical del dibujado. El comentario de `video.cpp` que documenta la
+aritmética de 11 bits en la colisión es correcto y no contradice al dibujado,
+cuyo recorte a 8 bits es equivalente.
 
-Cambiar el dibujado para que use 11 bits, igual que la colisión:
-
-```cpp
-int map_y = (py + band_scroll_y) & 0x7FF;
-int tile_row = (map_y / TILE_H) & (MAP_H - 1);
-int pix_y = map_y % TILE_H;
-```
-
-Coste: una línea. Deja el emulador fiel al hardware en todo el rango del registro.
-
-### B. Documentar que `scroll_y` fuera de 0..255 es indefinido
-
-El manual del core dice explícitamente (§7.1) que Y va de **0 a 255** y que «los bits
-por encima de esos rangos se ignoran». Si se acepta que nadie va a escribir fuera de
-rango, el emulador actual es válido para todo uso legítimo y no hay nada que tocar.
-
-### C. Recortar en el core
-
-Añadir en el RTL un recorte explícito de `scroll_y` a 8 bits, para que el manual y el
-hardware digan lo mismo sin ambigüedad. **No recomendado ahora**: toca el RTL y
-consume recursos en un chip al 99 % de CLS, por un caso que nadie usa.
-
----
-
-## Recomendación
-
-**Opción A.** Es una línea, no toca el RTL, y elimina la asimetría entre el dibujado
-y la colisión dentro del propio emulador. Aunque en la práctica nadie escriba
-`scroll_y > 255`, tener dos anchos distintos para la misma operación es una trampa
-para el próximo que lea el código.
-
-Si prefieres no tocarlo, la **opción B** es defendible: basta con dejar escrito en
-`GUIA-USO.md` que `scroll_y` se comporta como 8 bits en el emulador y que valores
-mayores dan resultados distintos al hardware.
-
-Lo que **no** conviene es dejarlo sin decidir: hoy la documentación del emulador no
-menciona el tema, y la del core afirma algo («se ignoran») que el RTL no cumple.
-
----
-
-## Aclaración sobre el informe anterior
-
-El punto de la documentación **está resuelto** y no requiere más cambios: la
-explicación del scroll de banda en la colisión es ahora correcta en ambos proyectos
-(core `57774ed`, emulador `1583eb2`). Este informe es un hallazgo **nuevo y distinto**,
-sin relación con aquel.
+La Opción C (recortar `scroll_y` en el RTL) sigue descartada por coste: el chip
+está al 99 % de CLS y no hay nada que arreglar.
