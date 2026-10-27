@@ -738,9 +738,16 @@ El **scroll** desplaza la cámara sobre el mapa 64×32. Es global (por banda, ve
 - `$D804/$D805` = scroll X, en **píxeles lógicos**: 0..511 (bits 2:0 en `$D805`).
 - `$D806/$D807` = scroll Y, en **píxeles lógicos**: 0..255 (bits 2:0 en `$D807`).
 
-> Los registros almacenan 11 bits (0..2047), pero el mapa solo mide 64×32 tiles =
-> 512×256 px. **X envuelve módulo 512 y Y módulo 256**; los bits por encima de esos
-> rangos se ignoran.
+> Los registros almacenan **11 bits** (0..2047), pero el mapa mide 64×32 tiles =
+> 512×256 px. El scroll se **suma en 11 bits** y el exceso lo absorbe el módulo al
+> calcular la celda: **X envuelve módulo 512 y Y módulo 256**. Así, `512` equivale a
+> `0` en X y `256` a `0` en Y.
+>
+> Los valores fuera de rango **no se descartan**: entran en la suma y vuelven a caer
+> en el mapa por esa envoltura. Como 512 y 256 son múltiplos del tamaño del tile
+> (8), el resultado práctico coincide con haber escrito el valor reducido — pero
+> **conviene escribir siempre 0..511 en X y 0..255 en Y** para que el código
+> diga lo mismo que hace el hardware.
 
 ### 7.2 Mover la cámara
 
