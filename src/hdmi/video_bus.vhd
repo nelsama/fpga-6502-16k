@@ -63,7 +63,7 @@ entity video_bus is
 
         -- Status de video (registro de LECTURA $D803)
         status_in    : in  std_logic_vector(7 downto 0);
-        clear_stats  : out std_logic;                 -- pulso: limpiar flags sticky
+        clear_stats  : out std_logic;                 -- pulso al leer $D803 (video_core no lo usa)
         cpu_data_out : out std_logic_vector(7 downto 0);  -- dato al bus (STATUS)
 
         -- Registros de SCROLL (escritura): $D804-$D808
@@ -354,7 +354,8 @@ begin
                 end if;
                 setup_active_d <= setup_active;
 
-                -- lectura del STATUS: dispara la limpieza de flags sticky
+                -- lectura del STATUS: genera el pulso clear_stats. OJO: video_core
+                -- no tiene flags sticky y no consume esta señal (ver STATUS alli).
                 if (cpu_rw = '1') and (is_vid_st = '1') then
                     clear_tgl <= not clear_tgl;
                 end if;

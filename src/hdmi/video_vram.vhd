@@ -4,14 +4,17 @@
 -- Arreglos independientes, cada uno inferido como BSRAM en modo
 -- Semi Dual Port (escritura por el puerto A, lectura por el puerto B):
 --
---   tilemap   : 2048 x 8   (1200 usadas)  indice de patron por celda (40x30)
---   attr      : 2048 x 8   (1200 usadas)  atributo por celda (paleta, flips)
+--   tilemap   : 2048 x 8   (2048 celdas) indice de patron por celda (mapa 64x32)
+--   attr      : 2048 x 8   (2048 celdas) atributo por celda (paleta, flips)
 --   pattern   : 2048 x 16  (2048 usadas)  patrones de FONDO, 2bpp planar -> 256 tiles
 --   spr_pat   : 512 x 16   (64 usadas)    patrones de SPRITE, 2bpp planar
 --
 --   El OAM (32 sprites x 5 bytes) NO esta aqui: se implementa en registros
 --   dentro de video_core, porque son solo 160 bytes y no justifican un bloque
 --   BSRAM entero de 2 KB.
+--
+--   Las 2048 celdas del mapa son usables: 1200 es solo la pantalla visible
+--   (40x30); el scroll puede mostrar cualquier celda del mapa.
 --
 -- Presupuesto real:
 --   tilemap   : 1 bloque

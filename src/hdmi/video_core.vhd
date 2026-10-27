@@ -79,7 +79,7 @@ entity video_core is
         --   bit 7 = VBLANK, bit 6 = SPRITE_OVERFLOW, bit 5 = HIT,
         --   bit 4 = VIDEO_READY (1 = inicializacion de VRAM terminada)
         status_out  : out std_logic_vector(7 downto 0);
-        clear_stats : in  std_logic;   -- 1 = limpiar flags sticky (al leer)
+        clear_stats : in  std_logic;   -- SIN USO: no hay flags sticky (ver STATUS)
 
         -- SETUP de video por hardware (Fase 15, registro $D816)
         --   setup_req : pulso de 1 ciclo de clk_pixel. Reinicia la secuencia de
@@ -378,10 +378,12 @@ architecture rtl of video_core is
     signal line_y       : unsigned(7 downto 0) := (others => '0');
 
     -- ========================================================================
-    -- COLISION SPRITE <-> TILE SOLIDO (punto = centro del sprite)
+    -- COLISION SPRITE <-> TILE SOLIDO (punto = COLL_POINT del OAM)
     --   Durante el blanking vertical se recorren los 32 sprites y, para cada
-    --   uno, se lee el atributo de la celda donde cae su CENTRO. Si el bit 4
-    --   (SOLIDO) esta a 1, se marca el flag de colision de ese sprite.
+    --   uno, se lee el atributo de la celda donde cae su punto de colision
+    --   (byte +4 del OAM, campo COLL_POINT). Si el bit 4 del atributo (SOLIDO)
+    --   esta a 1, se marca el flag de colision de ese sprite.
+    --   NOTA: el centro del sprite solo es el caso COLL_POINT = $24.
     -- ========================================================================
     signal coll_phase    : integer range 0 to 1 := 0;   -- 0=idle, 1=barrido
     signal coll_idx      : unsigned(5 downto 0) := (others => '0');  -- 0..32
@@ -407,9 +409,12 @@ architecture rtl of video_core is
     -- ========================================================================
     -- STATUS (registro de lectura $D803)
     --   VBLANK    : 1 mientras el barrido esta fuera de la zona visible
-    --   OVERFLOW  : 1 si hubo mas sprites que huecos en el line buffer (sticky)
-    --   HIT       : 1 si dos sprites solaparon en pantalla (sticky)
-    --   Los bits sticky se limpian al leer el registro (gestionado en video_bus).
+    --   OVERFLOW  : 1 si hubo mas sprites que huecos en el line buffer
+    --   SOLID_HIT : 1 si algun sprite toco un tile solido
+    --   ATENCION: NO son sticky. SOLID_HIT se recalcula entero al empezar cada
+    --   barrido de colision (coll_flag se limpia en v_cnt = V_VISIBLE) y
+    --   OVERFLOW refleja el line buffer. Leer $D803 NO los limpia, pero tampoco
+    --   acumulan eventos entre lecturas. Las entradas clear_stats no se usan.
     -- ========================================================================
     signal vblank_f     : std_logic := '0';
     signal overflow_f   : std_logic := '0';
@@ -628,7 +633,7 @@ begin
     -- INICIALIZACION DE LA VRAM
     --   Fase 0: tilemap        -> columna mod 4 (damero, marco, diagonal, solido)
     --   Fase 1: atributos      -> misma paleta que el tile (0..3)
-    --   Fase 2: patrones fondo -> 4 tiles x 8 filas = 32 palabras
+    --   Fase 2: patrones fondo -> 8 tiles x 8 filas = 64 palabras
     --   Fase 3: patron sprite  -> 1 sprite x 8 filas = 8 palabras (un cuadrado)
     -- ========================================================================
     process (clk_pixel)
@@ -710,7 +715,7 @@ begin
 
     wr_tile <= '1' when (init_done = '0') and (init_phase = 0) else '0';
     wr_attr <= '1' when (init_done = '0') and (init_phase = 1) else '0';
-    -- fase 2: patrones de tiles 0..3 (en blanco).
+    -- fase 2: patrones de tiles 0..7 (8 tiles x 8 filas = 64 palabras).
     -- fase 4: expansion de la fuente. Solo se escribe mientras el contador
     -- retrasado apunta dentro del rango de la fuente (0..767).
     wr_pat  <= '1' when (init_done = '0') and (init_phase = 2) else
@@ -1012,12 +1017,17 @@ begin
     attr_rd_addr <= coll_addr when (coll_phase = 1) else cell_addr;
 
     -- ========================================================================
-    -- BARRI DO DE COLISION SPRITE<->TILE SOLIDO (punto = centro)
+    -- BARRIDO DE COLISION SPRITE<->TILE SOLIDO (punto = COLL_POINT)
     --   Ocurre una vez por frame, durante el blanking vertical (v_cnt >= V_VISIBLE),
     --   momento en el que el fondo no dibuja y el puerto B de atributos esta libre.
     --   Para cada sprite (0..31):
-    --     centro = (sx + 4, sy + 4)  (y el bit 4 del atributo = SOLIDO)
-    --     celda = (centro_x/8) + (centro_y/8)*64
+    --     punto = (sx + dx, sy + dy)   con (dx,dy) = COLL_POINT (byte +4 del OAM)
+    --     celda = (punto_x/8) + (punto_y/8)*64
+    --   Si SCALE2X esta activo, (dx,dy) se escalan a 0..15 (7 -> 15).
+    --   NO se filtra por Y: se recorren los 32 sprites aunque Y >= 248, asi que
+    --   un sprite "deshabilitado" para dibujar SI puede activar SOLID_HIT.
+    --   La celda tampoco se recorta a la pantalla: X de 9 bits y Y de 8 desbordan
+    --   (Y=255 con dy=7 da 262 & 0xFF = 6 -> fila 0).
     --   La BSRAM de atributo tiene 1 ciclo de latencia: se pide en el ciclo N y
     --   se captura el resultado en N+1.
     -- ========================================================================
