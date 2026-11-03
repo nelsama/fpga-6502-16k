@@ -43,8 +43,8 @@ imprimibles (`$20`–`$7F`), en **1bpp** (1 bit por píxel, 2 colores).
 | Dirección | `char*8 + fila`, con `char = ascii - $20` |
 
 El bloque es de 2048×9 porque es la **forma mínima** que se mapea a un bloque de
-BSRAM; las 1280 filas sobrantes se reutilizan como segunda copia de la fuente
-(ver §2.5).
+BSRAM; las 1280 filas sobrantes se reservaron para una segunda copia de la fuente
+que **no llegó a implementarse** (ver §2.5).
 
 ### 2.4 Fuente: charset original del C64
 
@@ -102,41 +102,39 @@ El array se declara de **9 bits** para que Gowin lo mapee en **un solo bloque**
 
 ---
 
-### 2.5 Dos copias de la fuente con distinto color de trazo
+### 2.5 Dos copias de la fuente con distinto color de trazo — ❌ NO IMPLEMENTADO
 
-El bloque físico tiene **2048 filas**, así que tras las 96 letras (768 filas)
-sobra más de la mitad. En vez de cerrar el banco a 1024 filas, la expansión
-genera **dos juegos de patrones** a partir de las mismas 768 filas:
+> ⚠️ **Esta sección describe un diseño previsto que NO está en el RTL.** Se deja
+> como referencia por si se retoma (está bloqueado por falta de CLS, ver
+> `docs/informe-optimizacion-resultados.md`).
+
+**Estado real:** la fase de expansión genera **una sola copia**. `font_color` está
+fijo a `"11"`, así que `plano0 = plano1 = byte` del glifo, y el trazo de **todas**
+las letras es `pixcode 11` → `pal_bg[pal][3]`.
+
+| Copia | Tiles | Trazo | Estado |
+|-------|-------|-------|--------|
+| A | `$00`..`$7F` (tile = ASCII) | `11` → entrada 3 | ✅ **implementada** |
+| B | `$80`..`$DF` | `01` → entrada 1 | ❌ **no existe** |
+
+**Hoy el bit 7 del tile NO selecciona color.** Es parte del índice de tile, y los
+tiles `$80`–`$FF` son **otros patrones** (el Pac-Man los usa para la fruta y otros
+gráficos). Intentar usarlo como selector de color rompe esos gráficos: comprobado
+en hardware.
+
+#### Diseño previsto (no implementado)
 
 | Copia | Tiles | Trazo (`pixcode`) | Entrada de paleta |
 |-------|-------|-------------------|-------------------|
 | A | `$00`..`$7F` (tile = ASCII) | `11` | `pal_bg[pal][3]` |
 | B | `$80`..`$DF` (tile = ASCII OR `$80`) | `01` | `pal_bg[pal][1]` |
 
-**El bit 7 del tile es el selector de copia:** `tile XOR $80` cambia el dibujo
-por el mismo carácter con el otro color de trazo. Es un simple NOT del bit 7, sin
-sumas ni tablas.
+La copia B vive en `ASCII OR $80`, así que para dibujar una `A` con el trazo en la
+entrada 1 de la paleta se escribiría el tile `$41 OR $80 = $C1`.
 
-Como cada celda elige su propia **paleta** (4 bits del atributo, de las cuales se
-usan 2 → 4 paletas), el resultado es:
-
-- **4 colores de trazo** para las letras normales (uno por paleta, entrada 3).
-- **4 colores de trazo** para las letras de la copia B (uno por paleta, entrada 1).
-
-Es decir, **dos colores distintos para la misma letra con la misma paleta**, sin
-gastar BSRAM ni lógica adicional. El fondo se sigue viendo a través de las dos
-copias (es `pixcode 00`, transparente).
-
-**Ejemplo: escribir `A` blanca y `A` en el color de la entrada 1 de la paleta 2**
-
-```asm
-; celda -> tile $41 (copia A, trazo = entrada 3 de su paleta)
-; celda -> tile $C1 (copia B, trazo = entrada 1 de su paleta)
-LDA #$C1 : STA $D802      ; tras fijar dir/attr de la celda, escribir tile $C1
-```
-
-> La copia B **no cambia nada del software actual**: los tiles `$00`..`$7F` no se
-> tocan y siguen viéndose exactamente igual.
+**Por qué no se implementó:** cuesta ~3 FF de pipeline más comparadores, y el
+diseño está al 98 % de CLS. Los tres intentos de añadir color de texto fallaron
+(ver el informe de optimización).
 
 ## 3. Expansión 1bpp → 2bpp (fase de inicialización)
 
@@ -152,24 +150,19 @@ La expansión la hace **una fase de la máquina de inicialización de la VRAM**
 
 ### 3.2 La expansión
 
-La fuente se expande **dos veces** en la misma pasada, con el color del trazo
-en una entrada distinta de la paleta. Por cada carácter (0..95) y cada fila (0..7):
+La fuente se expande **una sola vez** (la copia B de la sección 2.5 no está
+implementada). Por cada carácter (0..95) y cada fila (0..7):
 
 ```
 byte = font_arr[char*8 + fila]                 (1bpp, 8 bits)
 
-COPIÓN A -> tiles   0..127  (tile = ASCII, como siempre)
+COPIA A (única) -> tiles 0..127  (tile = ASCII)
   plano0 = byte AND MASK_LO[color]
   plano1 = byte AND MASK_HI[color]
   pat_arr[ascii*8 + fila] = plano1 & plano0
-
-COPIA B -> tiles 128..223 (tile = ASCII OR $80)
-  plano0 = byte AND MASK_LO[color]
-  plano1 = 0
-  pat_arr[(ascii OR $80)*8 + fila] = plano1 & plano0
 ```
 
-Máscaras según el color elegido (por defecto color 3 = blanco):
+Máscaras según el color elegido (`font_color`, hoy fijo a **3** = blanco):
 
 | color | MASK_LO | MASK_HI |
 |-------|---------|---------|
@@ -178,27 +171,16 @@ Máscaras según el color elegido (por defecto color 3 = blanco):
 | 2 | `$00` | `$FF` |
 | 3 | `$FF` | `$FF` |
 
-**Diferencia entre copias (importante):**
+Con `font_color = "11"`, `plano0 = plano1 = byte`, así que el trazo es
+**`pixcode 11`** → `pal_bg[pal][3]`. Solo hay **un color de trazo por paleta**
+(4 en total, uno por paleta).
 
-| Copia | `pixcode` del trazo | Color del trazo |
-|-------|---------------------|-----------------|
-| A (tiles 0..127) | `11` | `pal_bg[pal][3]` |
-| B (tiles 128..223) | `01` | `pal_bg[pal][1]` |
-
-En las dos copias el fondo es `pixcode 00`, que es **transparente**: se ve el
-color de fondo global (`BG_COLOR`, entrada 15) o lo que haya detrás. Por eso la
-copia B no cambia el aspectо de fondo de las letras, solo el color del trazo.
+El fondo del glifo es `pixcode 00`, **transparente**: se ve el color de fondo
+global (`BG_COLOR`, entrada 15) o lo que haya detrás.
 
 **Mapeo de tiles:** el patrón escrito en `ascii*8+fila` hace que **tile = ASCII**
-en la copia A (comportamiento clásico). La copia B vive en `ASCII OR $80`, así
-que para dibujar una `A` con el trazo en la entrada 1 de la paleta se escribe el
-tile `$41 OR $80 = $C1`. **El bit 7 del byte es el único selector**, así que el
-código de dibujo puede alternar los dos colores con `EOR #$80`.
-
-El software actual no se entera: sus tiles `$00`..`$7F` se ven idénticos.
-
-> **Tiles 128..223:** antes estaban libres y ahora los usa la copia B de la
-> fuente. Los tiles `$00`..`$7F` (copia A) se ven igual que siempre.
+(comportamiento clásico). El bit 7 del tile es parte del índice y **no** selecciona
+color.
 
 ### 3.3 Alineación (latencia BSRAM) — CRÍTICO
 
@@ -219,15 +201,11 @@ Con 1 ciclo, cada fila se escribe en la dirección de la **fila siguiente**: la
 píxeles o líneas de más sobre `h`, `k`, `q`, `r`, `z`, que son los que tienen
 filas vacías al principio).
 
-La fase 4 recorre la fuente **dos veces** con un contador dedicado:
+La fase 4 recorre las **768 filas** de la fuente (96 caracteres × 8 filas).
 
-- `font_pos` (10 bits) cuenta **0..767** = fila de la fuente.
-- `font_ph` (1 bit) marca la copia: **0 = A, 1 = B**.
-
-La dirección de lectura es `font_pos`; la de escritura es `font_cnt_d2`
+La dirección de lectura es `font_init_addr`; la de escritura es `font_cnt_d2`
 (retrasada 2 ciclos, que es lo que tarda la fuente: 1 ciclo de la BSRAM de
-`video_vram` + 1 de `font_row_d`), desplazada 1024 posiciones en la copia B.
-Al final se añaden unos ciclos de cola para vaciar el pipeline.
+`video_vram` + 1 de `font_row_d`).
 
 > ⚠️ **No usar `init_cnt mod 768`.** `init_cnt` es un entero que si no se usa
 > como dirección el sintetizador **trunca a 8 bits**, y el módulo sobre un

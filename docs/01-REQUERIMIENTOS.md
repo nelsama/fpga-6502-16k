@@ -195,6 +195,13 @@ pal_bg(15), etc.) está en `07-MANUAL-PROGRAMACION.md` §2.1.**
 
 Cada celda del tilemap tiene un **byte de atributo** asociado:
 
+> ⚠️ **La especificación de abajo es el diseño ORIGINAL previsto. La
+> implementación real es mucho menor: ver `03-FORMATOS-Y-MEMORIA.md` §2.**
+>
+> Realmente implementado: `PALETA` en bits 1:0 (**4 paletas**, no 16) y
+> `SOLIDO` en el bit 4. `PRIO`, `FLIP_X` y `FLIP_Y` **no están implementados**;
+> los bits 2, 3, 5, 6 y 7 se descartan en el RTL.
+
 ```
   bit 7    bit 6    bit 5    bit 4    bit 3    bit 2    bit 1    bit 0
 ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐
@@ -202,26 +209,38 @@ Cada celda del tilemap tiene un **byte de atributo** asociado:
 └────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘
 ```
 
-| Bits | Campo | Descripción |
-|------|-------|-------------|
-| 7 | `PRIO` | Prioridad: 0 = detrás de sprites, 1 = delante |
-| 6 | `FLIP_Y` | Volteo vertical |
-| 5 | `FLIP_X` | Volteo horizontal |
-| 4:0 | `PALETA` | Índice de paleta (0–15 de las 16 disponibles; 4 bits usados) |
+| Bits | Campo | Descripción | Estado |
+|------|-------|-------------|--------|
+| 7 | `PRIO` | Prioridad: 0 = detrás de sprites, 1 = delante | ❌ no implementado |
+| 6 | `FLIP_Y` | Volteo vertical | ❌ no implementado |
+| 5 | `FLIP_X` | Volteo horizontal | ❌ no implementado |
+| 4 | `SOLIDO` | Colisión sprite↔tile | ✅ |
+| 3:0 | `PALETA` | Índice de paleta | ⚠️ solo 1:0 (**4 paletas**) |
 
-**Multiplicadores de variedad:** 256 patrones × 4 orientaciones × 16 paletas
-= **16.384 combinaciones visuales**.
+**Multiplicadores de variedad (real):** 40 patrones × 1 orientación × 4 paletas
+× 4 colores = **16 colores distintos por celda**. El diseño original preveía
+256 patrones × 4 orientaciones × 16 paletas = 16.384 combinaciones, pero la
+BSRAM está agotada (26/26 bloques).
 
 ### 4.1 Byte de flags de sprite (OAM)
 
 ```
   bit 7    bit 6    bit 5    bit 4    bit 3    bit 2    bit 1    bit 0
 ┌────────┬────────┬────────┬────────┬────────┬────────┬────────┬────────┐
-│ FLIP_Y │ FLIP_X │ PRIO   │  ÁNGULO/ESCALA (5 bits: 4 ángulo + 1 escala) │
+│ FLIP_Y │ FLIP_X │ PRIO   │SCALE2X │           PALETA (4 bits)          │
 └────────┴────────┴────────┴────────┴────────┴────────┴────────┴────────┘
 ```
 
-(A confirmar en diseño detallado: reparto exacto de bits de ángulo y escala.)
+| Bit | Campo | Estado |
+|-----|-------|--------|
+| 7 | `FLIP_Y` | ✅ implementado |
+| 6 | `FLIP_X` | ✅ implementado |
+| 5 | `PRIO` (1 = detrás del fondo) | ✅ implementado |
+| 4 | `SCALE2X` (doble tamaño) | ✅ implementado |
+| 3:0 | `PALETA` | ✅ (usa 1:0 → 4 paletas) |
+
+A diferencia del atributo del fondo, **los sprites sí implementan flips,
+prioridad y escalado**.
 
 ---
 

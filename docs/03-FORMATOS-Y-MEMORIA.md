@@ -71,56 +71,74 @@ Cada fila se descompone en un byte de cada plano. El patrón completo son
 
 **Un byte por celda** del tilemap (40×30 = 1.200 bytes).
 
+> ⚠️ **Este byte está MUY infrautilizado respecto al diseño original.** El RTL
+> solo lee **3 bits**: `attr_dout(1:0)` (paleta) y `attr_dout(4)` (sólido). Los
+> bits 2, 3, 5, 6 y 7 llegan a la BSRAM y se descartan. Verificado en
+> `src/hdmi/video_core.vhd`: `attr_dout` solo se referencia al capturar la paleta
+> y en el barrido de colisión.
+
+### 2.0 Estado real (implementado)
+
 ```
-   bit 7     bit 6     bit 5     bit 4   bit 3   bit 2   bit 1   bit 0
- ┌─────────┬─────────┬─────────┬───────┬───────┬───────┬───────┬───────┐
- │  PRIO   │ FLIP_Y  │ FLIP_X  │             PALETA (4 bits)           │
- └─────────┴─────────┴─────────┴───────┴───────┴───────┴───────┴───────┘
+   bit 7     bit 6     bit 5     bit 4   bit 3   bit 2   bit 1  bit 0
+ ┌─────────┬─────────┬─────────┬───────┬───────┬───────┬──────────────┐
+ │  libre  │  libre  │  libre  │SOLIDO │ libre │ libre │    PALETA    │
+ └─────────┴─────────┴─────────┴───────┴───────┴───────┴──────────────┘
 ```
 
-| Bits | Campo | Valores | Efecto |
-|------|-------|---------|--------|
-| 7 | `PRIO` | 0 / 1 | **1** = delante de los sprites; **0** = detrás |
-| 6 | `FLIP_Y` | 0 / 1 | Volteo vertical (invertir orden de filas) |
-| 5 | `FLIP_X` | 0 / 1 | Volteo horizontal (invertir bits del byte) |
-| **4** | **`SOLIDO`** | 0 / 1 | **1** = celda sólida (colisión sprite↔tile, Fase 10) |
-| 3:0 | `PALETA` | 0–15 | Índice de paleta |
+| Bits | Campo | Estado | Efecto |
+|------|-------|--------|--------|
+| 7 | `PRIO` | ❌ **no implementado** | Reservado |
+| 6 | `FLIP_Y` | ❌ **no implementado** | Reservado |
+| 5 | `FLIP_X` | ❌ **no implementado** | Reservado |
+| **4** | **`SOLIDO`** | ✅ **implementado** | **1** = celda sólida (colisión sprite↔tile) |
+| 3 | `PALETA` (alto) | ❌ **no implementado** | Libre |
+| 2 | `PALETA` (alto) | ❌ **no implementado** | Libre |
+| 1:0 | `PALETA` | ✅ **implementado** | **4 paletas** (0–3) |
 
-> **Nota de diseño:** el bit 4 se usa ahora como flag `SOLIDO` para la colisión
-> sprite↔tile (Fase 10). La paleta de fondo queda en 16 valores (bits 3:0).
+**Consecuencia práctica:** los flips y la prioridad por celda **no existen** en el
+hardware. Un tile del fondo no se puede voltear ni poner delante de los sprites.
+Los únicos valores útiles hoy son:
 
-### 2.0 Colisión sprite↔tile (Fase 10)
+| Valor | Efecto |
+|-------|--------|
+| `$00`–`$03` | Paleta 0–3, no sólido |
+| `$10`–`$13` | Paleta 0–3, **sólido** |
+
+Escribir bits 2, 3, 5, 6 o 7 no produce ningún efecto visible.
+
+### 2.0.1 Colisión sprite↔tile
 
 El bit 4 del atributo (`SOLIDO`) habilita la detección de colisión: una vez por
 frame, el hardware recorre los 32 sprites y, para el **centro** de cada uno, lee
 el atributo de su celda. Si el bit 4 = 1, el sprite “toca” un tile sólido.
 El resultado global es el bit 5 de `$D803` (`SOLID_HIT`).
 
-### 2.1 Cómo el motor aplica el atributo
+### 2.1 Cómo el motor aplica el atributo (real)
 
 ```
  1. Lee el índice de tile de la celda       → tilemap[celda]
  2. Lee el atributo de la celda             → atrib[celda]
  3. Lee el patrón (2 planos)                → patrones[tile]
- 4. Aplica FLIP_X (invertir bits)           si bit 5
- 5. Selecciona fila con FLIP_Y              si bit 6
- 6. Por cada píxel:
+ 4. Por cada píxel:
        índice = (plano1_bit, plano0_bit)    → 0..3
-       color  = PALETA_FONDO[atrib.PALETA][índice]
- 7. Mezcla con sprites según PRIO
+       color  = pal_bg[atrib.PALETA[1:0]][índice]
+ 5. Mezcla con sprites según PRIO del SPRITE (no de la celda)
 ```
 
-### 2.2 Efecto multiplicador
+### 2.2 Variedad real
 
 | Factor | Valores | Origen |
 |--------|---------|--------|
-| Patrones | 256 | Tileset |
-| Orientaciones | 4 | FLIP_X + FLIP_Y |
-| Paletas | 16 | Campo PALETA |
-| **Combinaciones** | **16.384** | |
+| Patrones | 40 (320 palabras) | Tileset en BSRAM |
+| Orientaciones | **1** | Sin flips de fondo |
+| Paletas | **4** | Campo `PALETA` (bits 1:0) |
+| Colores por paleta | 4 | 2bpp |
+| **Colores de celda** | **16** | |
 
-Esto permite que **el mismo patrón repetido en 900 celdas se vea de 16 maneras
-distintas** cambiando solo el byte de atributo de cada celda.
+Han de caber en **40 patrones**: `$20`–`$7F` los usa la fuente C64 y el resto
+queda para gráficos del juego. Por eso **el índice de tile no puede reservar
+bits** para otros fines (ver informes de optimización).
 
 ---
 

@@ -153,7 +153,7 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 | Área | `$D801` (bits 7:5 / bit3) | Tamaño | Unidad | Dirección | Uso |
 |------|---------------------------|--------|--------|-----------|-----|
 | **Tilemap** | `$00` | 2048 | bytes | `fila*64 + col` | índice de patrón por celda (mundo 64×32) |
-| **Atributos** | `$40` | 2048 | bytes | `fila*64 + col` | paleta/flips/PRIO/SÓLIDO por celda |
+| **Atributos** | `$40` | 2048 | bytes | `fila*64 + col` | paleta (bits 1:0) y SÓLIDO (bit 4); flips/PRIO **no implementados** |
 | **Patrones de fondo** | `$80`/`$A0` (plano 0/1) | 2048 | **palabras** | `tile*8 + fila` | 256 patrones de 8×8, 2bpp |
 | **OAM** | `$C0` (bit3=0) | 160 | bytes | `sprite*5 + campo` | 32 sprites × 5 campos |
 | **Patrones de sprite** | `$C8`/`$E8` (plano 0/1) | 512 | **palabras** | `patron*8 + fila` | 64 patrones de 8×8, 2bpp (§6.0) |
