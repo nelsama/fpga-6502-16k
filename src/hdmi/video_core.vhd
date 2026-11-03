@@ -137,7 +137,8 @@ architecture rtl of video_core is
     --   FONDO (pal_bg(15)). Asi el CPU lo cambia escribiendo esa entrada con
     --   el puerto de paleta ($D813=15, $D814, $D815) y no gasta FFs extra.
     --   Valor por defecto = pal_bg(15) inicial (ver pal_bg) = azul cielo.
-    signal bg_rgb24 : std_logic_vector(23 downto 0) := (others => '0');
+    --   (Ya no hay senal bg_rgb24: el mux final trabaja en 12 bits y se
+    --   expande a 24 una sola vez al final, ver COLOR FINAL.)
 
     signal h_cnt : unsigned(9 downto 0) := (others => '0');
     signal v_cnt : unsigned(9 downto 0) := (others => '0');
@@ -225,6 +226,7 @@ architecture rtl of video_core is
     signal pixcode : std_logic_vector(1 downto 0) := (others => '0');
     signal pal_idx : std_logic_vector(3 downto 0) := (others => '0');
     signal pal_rgb : std_logic_vector(11 downto 0) := (others => '0');
+    signal rgb12   : std_logic_vector(11 downto 0) := (others => '0');
     signal rgb24   : std_logic_vector(23 downto 0) := (others => '0');
 
     type pal_t is array (0 to 15) of std_logic_vector(11 downto 0);
@@ -1465,25 +1467,19 @@ begin
     --     - sprite PRIO=1 activo -> sprite (detras del fondo, en los huecos)
     --     - si nada            -> BG_COLOR
     -- ========================================================================
-    -- BG_COLOR expandido a 24 bits (nibble duplicado) desde pal_bg(15).
-    bg_rgb24 <= pal_bg(15)(11 downto 8) & pal_bg(15)(11 downto 8) &
-                pal_bg(15)(7  downto 4) & pal_bg(15)(7  downto 4) &
-                pal_bg(15)(3  downto 0) & pal_bg(15)(3  downto 0);
+    -- BG_COLOR es pal_bg(15); el mux elige en 12 bits (RGB444) y la
+    -- expansion a 24 bits (nibble duplicado) se hace UNA sola vez al final.
+    --   Antes el mux era de 24 bits y expandia spr_rgb dos veces (PRIO 0 y 1)
+    --   y el fondo otras dos: ~144 bits de mux. Ahora ~84.
+    rgb12 <= pal_bg(15) when margen2 = '1' else
+             spr_rgb    when (spr_active = '1') and (spr_prio2 = '0') else
+             pal_rgb    when pixcode /= "00" else
+             spr_rgb    when spr_active = '1' else
+             pal_bg(15);
 
-    rgb24 <= (bg_rgb24) when margen2 = '1' else
-             (spr_rgb(11 downto 8) & spr_rgb(11 downto 8) &
-              spr_rgb(7  downto 4) & spr_rgb(7  downto 4) &
-              spr_rgb(3  downto 0) & spr_rgb(3  downto 0))
-             when (spr_active = '1') and (spr_prio2 = '0') else
-             (pal_rgb(11 downto 8) & pal_rgb(11 downto 8) &
-              pal_rgb(7  downto 4) & pal_rgb(7  downto 4) &
-              pal_rgb(3  downto 0) & pal_rgb(3  downto 0))
-             when pixcode /= "00" else
-             (spr_rgb(11 downto 8) & spr_rgb(11 downto 8) &
-              spr_rgb(7  downto 4) & spr_rgb(7  downto 4) &
-              spr_rgb(3  downto 0) & spr_rgb(3  downto 0))
-             when spr_active = '1' else
-             (bg_rgb24);
+    rgb24 <= rgb12(11 downto 8) & rgb12(11 downto 8) &
+             rgb12(7  downto 4) & rgb12(7  downto 4) &
+             rgb12(3  downto 0) & rgb12(3  downto 0);
 
     -- ========================================================================
     -- TRANSMISOR TMDS
