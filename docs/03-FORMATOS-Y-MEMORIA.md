@@ -422,9 +422,9 @@ Arreglos BSRAM direccionados por separado. La VRAM son **6 bloques**:
 |---------|--------------------|-------------------|-------|
 | Tilemap | 2048×8 | 2048 (64×32) | 1 |
 | Atributos | 2048×8 | 2048 (64×32) | 1 |
-| Patrones de fondo | 2048×16 | 1536 + 768 (fuente) | 2 |
+| Patrones de fondo | 2048×16 | 2048 (tiles 0..255) | 2 |
 | Patrones de sprite | 512×16 | 512 (64×8) | 1 |
-| **Fuente (`font_arr`)** | **1024×9** | **768 (96×8), 1bpp** | **1** |
+| **Fuente (`font_arr`)** | **2048×9** | **768 (96×8), 1bpp** | **1** |
 | **Total** | | | **6** |
 
 > El **OAM NO está en BSRAM**: son 32 sprites × 4 bytes en registros.
@@ -440,6 +440,22 @@ ROM, 6 de la VRAM). **No queda ningún bloque libre.**
 | Caracteres | 96 (`$20`–`$7F`) |
 | Dirección | `char*8 + fila`, con `char = ascii - $20` |
 | Destino tras expansión | `pat_arr[ascii*8 + fila]` (2bpp) → `tile = ASCII` |
+| Segunda copia | `pat_arr[(ascii OR $80)*8 + fila]`, trazo en la entrada 1 de la paleta |
+
+La expansión escribe **dos juegos** de patrones en `pat_arr` (ver
+[`04-MODO-TEXTO.md`](04-MODO-TEXTO.md) §2.5 y §3.2):
+
+| Tiles | Trazo | Entrada de paleta |
+|-------|-------|-------------------|
+| `$00`..`$7F` | `pixcode 11` | `pal_bg[pal][3]` |
+| `$80`..`$FF` | `pixcode 01` | `pal_bg[pal][1]` |
+
+El **bit 7 del tile** es el selector de copia: el mismo ASCII con el otro color de
+trazo se escribe como `ASCII EOR $80` (sin sumas ni tablas).
+
+Con 4 paletas seleccionables por el atributo de la celda, esto da **8 colores de
+trazo** para las letras (4 por copia) sin BSRAM ni lógica extra. El fondo sigue
+siendo transparente (`pixcode 00`) en ambas copias.
 
 Ver [`04-MODO-TEXTO.md`](04-MODO-TEXTO.md).
 

@@ -37,10 +37,14 @@ imprimibles (`$20`–`$7F`), en **1bpp** (1 bit por píxel, 2 colores).
 |-----------|-------|
 | Formato | 1bpp (1 byte = 1 fila de 8 píxeles) |
 | Caracteres | 96 (`$20`–`$7F`) |
-| Entradas | 1024 (0..1023), de 9 bits |
-| Usadas | 768 (96 chars × 8 filas) |
-| BSRAM | **1 bloque** (el último libre) |
+| Entradas | 2048 (0..2047), de 9 bits |
+| Usadas | 768 (96 chars × 8 filas); el resto a 0 |
+| BSRAM | **1 bloque** (2048×9, el mismo de antes) |
 | Dirección | `char*8 + fila`, con `char = ascii - $20` |
+
+El bloque es de 2048×9 porque es la **forma mínima** que se mapea a un bloque de
+BSRAM; las 1280 filas sobrantes se reutilizan como segunda copia de la fuente
+(ver §2.5).
 
 ### 2.4 Fuente: charset original del C64
 
@@ -94,9 +98,45 @@ font_arr[dir] = un byte, 1bpp:
 ```
 
 El array se declara de **9 bits** para que Gowin lo mapee en **un solo bloque**
-(1024×9 es la forma nativa del bloque BSRAM).
+(la forma nativa del bloque BSRAM de la GW1NR-9 es de 2048 posiciones de 9 bits).
 
 ---
+
+### 2.5 Dos copias de la fuente con distinto color de trazo
+
+El bloque físico tiene **2048 filas**, así que tras las 96 letras (768 filas)
+sobra más de la mitad. En vez de cerrar el banco a 1024 filas, la expansión
+genera **dos juegos de patrones** a partir de las mismas 768 filas:
+
+| Copia | Tiles | Trazo (`pixcode`) | Entrada de paleta |
+|-------|-------|-------------------|-------------------|
+| A | `$00`..`$7F` (tile = ASCII) | `11` | `pal_bg[pal][3]` |
+| B | `$80`..`$DF` (tile = ASCII OR `$80`) | `01` | `pal_bg[pal][1]` |
+
+**El bit 7 del tile es el selector de copia:** `tile XOR $80` cambia el dibujo
+por el mismo carácter con el otro color de trazo. Es un simple NOT del bit 7, sin
+sumas ni tablas.
+
+Como cada celda elige su propia **paleta** (4 bits del atributo, de las cuales se
+usan 2 → 4 paletas), el resultado es:
+
+- **4 colores de trazo** para las letras normales (uno por paleta, entrada 3).
+- **4 colores de trazo** para las letras de la copia B (uno por paleta, entrada 1).
+
+Es decir, **dos colores distintos para la misma letra con la misma paleta**, sin
+gastar BSRAM ni lógica adicional. El fondo se sigue viendo a través de las dos
+copias (es `pixcode 00`, transparente).
+
+**Ejemplo: escribir `A` blanca y `A` en el color de la entrada 1 de la paleta 2**
+
+```asm
+; celda -> tile $41 (copia A, trazo = entrada 3 de su paleta)
+; celda -> tile $C1 (copia B, trazo = entrada 1 de su paleta)
+LDA #$C1 : STA $D802      ; tras fijar dir/attr de la celda, escribir tile $C1
+```
+
+> La copia B **no cambia nada del software actual**: los tiles `$00`..`$7F` no se
+> tocan y siguen viéndose exactamente igual.
 
 ## 3. Expansión 1bpp → 2bpp (fase de inicialización)
 
@@ -112,15 +152,21 @@ La expansión la hace **una fase de la máquina de inicialización de la VRAM**
 
 ### 3.2 La expansión
 
-Por cada carácter (0..95) y cada fila (0..7):
+La fuente se expande **dos veces** en la misma pasada, con el color del trazo
+en una entrada distinta de la paleta. Por cada carácter (0..95) y cada fila (0..7):
 
 ```
 byte = font_arr[char*8 + fila]                 (1bpp, 8 bits)
 
-plano0 = byte AND MASK_LO[color]
-plano1 = byte AND MASK_HI[color]
+COPIÓN A -> tiles   0..127  (tile = ASCII, como siempre)
+  plano0 = byte AND MASK_LO[color]
+  plano1 = byte AND MASK_HI[color]
+  pat_arr[ascii*8 + fila] = plano1 & plano0
 
-pat_arr[ascii*8 + fila] = plano1 & plano0      (16 bits, 2bpp planar)
+COPIA B -> tiles 128..223 (tile = ASCII OR $80)
+  plano0 = byte AND MASK_LO[color]
+  plano1 = 0
+  pat_arr[(ascii OR $80)*8 + fila] = plano1 & plano0
 ```
 
 Máscaras según el color elegido (por defecto color 3 = blanco):
@@ -132,8 +178,27 @@ Máscaras según el color elegido (por defecto color 3 = blanco):
 | 2 | `$00` | `$FF` |
 | 3 | `$FF` | `$FF` |
 
-**Mapeo de tiles:** el patrón escrito en `ascii*8+fila` hace que **tile = ASCII**.
-Así el software escribe el ASCII directo en el tilemap.
+**Diferencia entre copias (importante):**
+
+| Copia | `pixcode` del trazo | Color del trazo |
+|-------|---------------------|-----------------|
+| A (tiles 0..127) | `11` | `pal_bg[pal][3]` |
+| B (tiles 128..223) | `01` | `pal_bg[pal][1]` |
+
+En las dos copias el fondo es `pixcode 00`, que es **transparente**: se ve el
+color de fondo global (`BG_COLOR`, entrada 15) o lo que haya detrás. Por eso la
+copia B no cambia el aspectо de fondo de las letras, solo el color del trazo.
+
+**Mapeo de tiles:** el patrón escrito en `ascii*8+fila` hace que **tile = ASCII**
+en la copia A (comportamiento clásico). La copia B vive en `ASCII OR $80`, así
+que para dibujar una `A` con el trazo en la entrada 1 de la paleta se escribe el
+tile `$41 OR $80 = $C1`. **El bit 7 del byte es el único selector**, así que el
+código de dibujo puede alternar los dos colores con `EOR #$80`.
+
+El software actual no se entera: sus tiles `$00`..`$7F` se ven idénticos.
+
+> **Tiles 128..223:** antes estaban libres y ahora los usa la copia B de la
+> fuente. Los tiles `$00`..`$7F` (copia A) se ven igual que siempre.
 
 ### 3.3 Alineación (latencia BSRAM) — CRÍTICO
 
@@ -145,7 +210,7 @@ ciclo N   : init_cnt = k, font_init_addr = k    -> BSRAM captura k
 ciclo N+1 : font_dout = font_arr[k]
 ciclo N+2 : font_row_d = font_arr[k]            (dato, registrado)
             font_cnt_d2 = k                      (init_cnt retrasado 2 ciclos)
-         -> se escribe pat_arr[256 + k] con el dato expandido
+         -> se escribe pat_arr[k] con el dato expandido
 ```
 
 **El retardo DEBE ser de 2 ciclos** (`font_cnt_d` y `font_cnt_d2` en cascada).
@@ -154,8 +219,20 @@ Con 1 ciclo, cada fila se escribe en la dirección de la **fila siguiente**: la
 píxeles o líneas de más sobre `h`, `k`, `q`, `r`, `z`, que son los que tienen
 filas vacías al principio).
 
-La fase 4 cuenta **772 ciclos** (768 filas útiles + 4 de margen para la latencia) y
-solo escribe mientras `font_cnt_d2 < 768`.
+La fase 4 recorre la fuente **dos veces** con un contador dedicado:
+
+- `font_pos` (10 bits) cuenta **0..767** = fila de la fuente.
+- `font_ph` (1 bit) marca la copia: **0 = A, 1 = B**.
+
+La dirección de lectura es `font_pos`; la de escritura es `font_cnt_d2`
+(retrasada 2 ciclos, que es lo que tarda la fuente: 1 ciclo de la BSRAM de
+`video_vram` + 1 de `font_row_d`), desplazada 1024 posiciones en la copia B.
+Al final se añaden unos ciclos de cola para vaciar el pipeline.
+
+> ⚠️ **No usar `init_cnt mod 768`.** `init_cnt` es un entero que si no se usa
+> como dirección el sintetizador **trunca a 8 bits**, y el módulo sobre un
+> contador truncado desalinea la fila leída con la escrita: cada glifo aparece
+> corrido un byte y el texto sale con letras cambiadas.
 
 ---
 
@@ -165,13 +242,25 @@ La VRAM se llena al encender en **5 fases**:
 
 | Fase | Escribe en | Contenido |
 |------|-----------|-----------|
-| 0 | `tile_arr` | tilemap: `$20` (espacio) en las 1200 celdas |
+| 0 | `tile_arr` | tilemap: `$20` (espacio) en las 2048 celdas |
 | 1 | `attr_arr` | atributos: `0` (paleta de TEXTO) |
-| 2 | `pat_arr` (0..31) | patrones de tiles 0..3: **en blanco** |
-| 3 | `spr_arr` | 3 patrones de sprite de ejemplo |
-| 4 | `pat_arr` (`$20..$7F`) | **expansión de la fuente** |
+| 2 | `pat_arr` (0..63) | patrones de tiles 0..7: **a cero** |
+| 3 | `spr_arr` | patrones de sprite 0..2: **a cero** |
+| 4 | `pat_arr` (`$00..$1FF`) | **expansión de la fuente** (copias A y B) |
+
+> Las fases 2 y 3 escriben ceros. Antes ponían arte de demo preincorporado
+> (8 tiles: tierra, césped, árbol, nube… y 3 sprites: cara, rombo, X), pero se
+> **eliminó**: no servía para nada. La fase 4 sobrescribía los tiles 0–7, y todo
+> el software escribe sus propios patrones antes de dibujar. Quitarlo liberó
+> bastante lógica, que en este chip era necesaria para poder colocar el diseño.
 
 Al terminar la fase 4, se pone **`init_done = '1'`**.
+
+### 4.0 Un SETUP (`$D816`) se salta las fases 2 y 3
+
+Si la secuencia la dispara el CPU por `$D816`, tras limpiar tilemap y atributos
+(fases 0 y 1) **se salta directamente a la fase 4**, para no reiniciar los
+patrones de fondo ni de sprite: el juego puede tener ahí su propio arte.
 
 ### 4.1 `init_done` y el puerto A
 
@@ -320,8 +409,8 @@ La Fase 7 costó **~+70 LUTs** (lógica de expansión y mux) y **+1 bloque BSRAM
    - `system_clk` = 6,75 MHz (periféricos, `video_bus`).
    - `cpu_clk` = 3,375 MHz.
 
-4. **BSRAM: una sola forma por array.** Declarar `font_arr` como `1024×9` (no
-   `1024×8`) es lo que permite que **Gowin lo mapee en un solo bloque**. Un array
+4. **BSRAM: una sola forma por array.** Declarar `font_arr` como `2048×9` (no
+   `2048×8`) es lo que permite que **Gowin lo mapee en un solo bloque**. Un array
    declarado y no usado se **optimiza y desaparece** (por eso hay que medir con la
    lectura conectada).
 
@@ -345,7 +434,7 @@ La Fase 7 costó **~+70 LUTs** (lógica de expansión y mux) y **+1 bloque BSRAM
 | `src/asm/mk_font.py` | Generador de fuente propia (arte ASCII → 1bpp). |
 | `src/asm/mk_font_c64.py` | **Generador desde el charset original del C64.** |
 | `src/asm/c64_charrom.bin` | **Charset original del C64** (4096 B). |
-| `src/hdmi/font_data.vhd` | Paquete con la fuente precargada (1024×9). |
+| `src/hdmi/font_data.vhd` | Paquete con la fuente precargada (2048×9). |
 | `src/hdmi/video_vram.vhd` | Añadido `font_arr` + puerto de lectura. |
 | `src/hdmi/video_core.vhd` | Fase 4 (expansión), paleta de texto, `VIDEO_READY`. |
 | `src/asm/video_test.asm` | Prueba de modo texto. |

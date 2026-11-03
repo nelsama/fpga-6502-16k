@@ -389,9 +389,8 @@ architecture rtl of video_core is
     signal coll_idx      : unsigned(5 downto 0) := (others => '0');  -- 0..32
     signal coll_addr     : unsigned(10 downto 0) := (others => '0');
     signal coll_pending  : std_logic := '0';    -- lectura de atributo en curso
-    signal coll_flag     : std_logic_vector(31 downto 0) := (others => '0');
     signal attr_rd_addr  : unsigned(10 downto 0) := (others => '0');
-    signal solid_hit     : std_logic := '0';   -- OR de coll_flag
+    signal solid_hit     : std_logic := '0';   -- 1 si algun sprite toco tile solido
 
     -- Patron del sprite (banco spr_pat de 64 patrones de 8x8)
     signal spr_pat_addr : unsigned(8 downto 0) := (others => '0');   -- 0..511
@@ -412,7 +411,7 @@ architecture rtl of video_core is
     --   OVERFLOW  : 1 si hubo mas sprites que huecos en el line buffer
     --   SOLID_HIT : 1 si algun sprite toco un tile solido
     --   ATENCION: NO son sticky. SOLID_HIT se recalcula entero al empezar cada
-    --   barrido de colision (coll_flag se limpia en v_cnt = V_VISIBLE) y
+    --   barrido de colision (se limpia en v_cnt = V_VISIBLE) y
     --   OVERFLOW refleja el line buffer. Leer $D803 NO los limpia, pero tampoco
     --   acumulan eventos entre lecturas. Las entradas clear_stats no se usan.
     -- ========================================================================
@@ -1059,21 +1058,21 @@ begin
                 coll_idx     <= (others => '0');
                 coll_addr    <= (others => '0');
                 coll_pending <= '0';
-                coll_flag    <= (others => '0');
+                solid_hit    <= '0';
             elsif coll_phase = 0 then
                 -- esperar el inicio del blanking vertical
                 if v_cnt = V_VISIBLE and h_cnt = 0 then
                     coll_phase   <= 1;
                     coll_idx     <= (others => '0');
                     coll_pending <= '0';
-                    coll_flag    <= (others => '0');
+                    solid_hit    <= '0';
                 end if;
             else
                 -- coll_phase = 1: barrido de los 32 sprites
                 if coll_pending = '1' then
                     -- el dato del atributo ya esta disponible; capturar bit 4
                     if attr_dout(4) = '1' then
-                        coll_flag(to_integer(coll_idx - 1)) <= '1';
+                        solid_hit <= '1';
                     end if;
                     coll_pending <= '0';
                 else
@@ -1127,8 +1126,6 @@ begin
         end if;
     end process;
 
-    -- bit global de colision: 1 si cualquier sprite toco un tile solido
-    solid_hit <= '1' when (coll_flag /= x"00000000") else '0';
 
     -- ========================================================================
     -- PALETA ESCRIBIBLE (Fase 13)
