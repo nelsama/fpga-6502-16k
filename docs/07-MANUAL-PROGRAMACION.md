@@ -390,6 +390,46 @@ parpadeos, paletas por nivel, etc.
 > el color al vuelo, hacerlo a mitad de frame puede mostrar una franja con el color
 > viejo y otra con el nuevo.
 
+#### ⚠️ Qué afecta reescribir una entrada de paleta
+
+Una entrada de paleta **no pertenece a una sola cosa**: es el color que usan **todas
+las celdas y sprites** que la referencien. Al cambiar una entrada cambia todo lo que
+caiga sobre ella, de golpe y sin aviso.
+
+**Paleta de FONDO** (entradas 0-15 = `paleta*4 + color`):
+
+| Entrada | La usan |
+|---|---|
+| color 0 (0, 4, 8, 12) | **nada**: el color 0 del fondo es siempre transparente; escribir ahí no tiene efecto visible |
+| color 1, 2, 3 | **tiles gráficos** del juego (muros, fruta, suelo…) **y** el **texto**, si su celda usa esa paleta |
+
+- El **texto** usa siempre una sola entrada: la que diga `$D818` (3 por defecto).
+  Con `$D818 = 3`, el color del texto de cada celda es la entrada `paleta*4 + 3`.
+- Los **tiles gráficos** pueden usar cualquiera de los 4 colores de su paleta, según
+  sus dos planos de bits.
+
+**Paleta de SPRITE** (entradas 16-31):
+
+| Entrada | La usan |
+|---|---|
+| color 0 (16, 20, 24, 28) | **nada**: el color 0 del sprite es transparente |
+| color 1, 2, 3 | **solo los sprites**, cada uno con la paleta de su byte FLAGS |
+
+**Ejemplo de efecto colateral:** si tu juego dibuja un muro con "paleta 1, color 1"
+(entrada 5 = `$A62` marrón) y cambias la entrada 5 a verde para tener texto verde,
+**el muro también se vuelve verde**.
+
+**Cómo evitar sorpresas:**
+
+1. Reserva **una paleta entera para el texto** y no la uses para gráficos. Con 4
+   paletas de fondo, dedica por ejemplo la 2 al texto y las 0, 1 y 3 a gráficos.
+2. Cambia la paleta **al cargar la pantalla**, no a mitad de partida.
+3. Si cambias una entrada que usan gráficos, **redibuja** o acepta el cambio de color.
+
+> ⚠️ **`BG_COLOR` es la entrada 15** (paleta 3, color 3). Si cambias esa entrada
+> cambia **el fondo de toda la pantalla** (el margen y las zonas transparentes), no
+> solo el texto que use "paleta 3, color 3".
+
 ### 4.5 Color del texto (`$D818`)
 
 La fuente se expande a los patrones con **una sola entrada de paleta** para todo el

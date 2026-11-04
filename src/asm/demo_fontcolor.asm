@@ -81,6 +81,12 @@ entry:
     JSR do_setup
     JSR draw_screen
 
+    ; ---- 7) restaurar las paletas de fabrica ----
+    ;   IMPORTANTE: la demo cambia entradas que tambien usan los tiles
+    ;   graficos. Al salir se devuelven a su valor original para no dejar
+    ;   colores cambiados al siguiente programa.
+    JSR restore_palettes
+
     RTS
 
 ; ============================================
@@ -225,6 +231,61 @@ dl_loop:
     INY
     JMP dl_loop
 dl_end:
+    RTS
+
+; ============================================
+; restore_palettes: devuelve a su valor de fabrica
+;   las entradas que modifico set_palettes.
+;   (las 9 entradas 1,2,3 / 5,6,7 / 9,10,11)
+; ============================================
+restore_palettes:
+    ; pal 0: 1=azul 00A, 2=cian 0CF, 3=blanco FFF
+    LDA #1
+    STA PAL_PTR
+    LDA #$0A
+    STA PAL_LO
+    LDA #$00
+    STA PAL_HI
+    LDA #$CF
+    STA PAL_LO
+    LDA #$00
+    STA PAL_HI
+    LDA #$FF
+    STA PAL_LO
+    LDA #$0F
+    STA PAL_HI
+
+    ; pal 1: 5=marron A62, 6=gris AAA, 7=blanco FFF
+    LDA #5
+    STA PAL_PTR
+    LDA #$62
+    STA PAL_LO
+    LDA #$0A
+    STA PAL_HI
+    LDA #$AA
+    STA PAL_LO
+    LDA #$0A
+    STA PAL_HI
+    LDA #$FF
+    STA PAL_LO
+    LDA #$0F
+    STA PAL_HI
+
+    ; pal 2: 9=verde 0A0, 10=verde oscuro 060, 11=verde 0F0
+    LDA #9
+    STA PAL_PTR
+    LDA #$A0
+    STA PAL_LO
+    LDA #$00
+    STA PAL_HI
+    LDA #$60
+    STA PAL_LO
+    LDA #$00
+    STA PAL_HI
+    LDA #$F0
+    STA PAL_LO
+    LDA #$00
+    STA PAL_HI
     RTS
 
 dl_msg:

@@ -313,14 +313,30 @@ fin:
 ### 5.3 Colores del texto
 
 El color lo determina la **paleta de la celda** (bits 1:0 de `attr_arr`), no el
-tilemap. La paleta 0 está reservada para texto:
+tilemap, más el **color de trazo global** (`$D818`).
 
-```
-paleta 0 - TEXTO : color0=negro, color1=gris, color2=blanco, color3=blanco
-```
+Con `$D818 = 3` (valor al arrancar), el texto de una celda usa la entrada
+`paleta*4 + 3` de la paleta de fondo:
 
-Para texto en otro color habría que reasignar paletas o escribir atributos por
-celda (pendiente, ver §7).
+| Paleta de la celda | Entrada | Color de texto por defecto |
+|---|---:|---|
+| 0 | 3 | blanco `FFF` |
+| 1 | 7 | blanco `FFF` |
+| 2 | 11 | verde `0F0` |
+| 3 | 15 | azul `48C` (**= `BG_COLOR`**) |
+
+**Hay dos palancas independientes:**
+
+| Palanca | Alcance | Coste |
+|---|---|---|
+| Paleta de la celda (attr 1:0) | **por celda**, inmediato | 0 |
+| `$D818` (color de trazo) | **global**, requiere `SETUP` | +4 CLS (ya implementado) |
+
+> ⚠️ **Cambiar una entrada de paleta afecta a TODO lo que la use**, no solo al
+texto: los tiles gráficos del juego también leen esas entradas. Ver
+> `07-MANUAL-PROGRAMACION.md` §4.4 «Qué afecta reescribir una entrada».
+
+> **Demo:** `src/asm/demo_fontcolor.asm` muestra los dos mecanismos en pantalla.
 
 ---
 
@@ -357,7 +373,8 @@ La Fase 7 costó **~+70 LUTs** (lógica de expansión y mux) y **+1 bloque BSRAM
 |------|--------|
 | Fuente de 96 caracteres ASCII imprimibles | ✅ |
 | Color fijo (blanco, paleta 0) | ✅ |
-| **Color de texto por celda** | ⏳ pendiente (`attr_arr` ya lo permite) |
+| Color de trazo global cambiable (`$D818`) | ✅ |
+| **Color de texto por celda** (más colores simultáneos) | ⏳ bloqueado: +9 CLS cuelga el arranque. Ver el informe de optimización |
 | **Cursor / scroll de texto** | ⏳ pendiente (software) |
 | **Integración con el monitor** | ⏳ requiere espacio en ROM (llena) |
 | Fuente estilo C64/retro exacta | ⏳ opcional (sustituir `mk_font.py`) |
