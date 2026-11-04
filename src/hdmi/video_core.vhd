@@ -103,6 +103,13 @@ entity video_core is
         pal_lo      : in  std_logic_vector(7 downto 0);
         pal_hi      : in  std_logic_vector(3 downto 0);
 
+        -- COLOR DE LA FUENTE (registro $D818, en video_bus).
+        --   Elige la entrada de paleta que usa el trazo de la fuente al
+        --   expandirse en la fase 4 (MASK_LO/MASK_HI):
+        --     0 = color 0 (invisible), 1 = color 1, 2 = color 2, 3 = color 3.
+        --   Se aplica al re-expandir la fuente (SETUP, $D816).
+        font_color_in : in std_logic_vector(1 downto 0);
+
         tmds_c0_p   : out std_logic;
         tmds_c0_n   : out std_logic;
         tmds_c1_p   : out std_logic;
@@ -269,8 +276,8 @@ architecture rtl of video_core is
     type mask4_t is array (0 to 3) of std_logic_vector(7 downto 0);
     constant MASK_LO : mask4_t := (x"00", x"FF", x"00", x"FF");
     constant MASK_HI : mask4_t := (x"00", x"00", x"FF", x"FF");
-    -- color de la fuente expandida y retardo de direccion (latencia BSRAM)
-    signal font_color : std_logic_vector(1 downto 0) := "11";   -- blanco
+    -- color de la fuente expandida (viene del registro $D818) y retardo de
+    -- direccion (latencia BSRAM)
     signal font_row_d : std_logic_vector(7 downto 0) := (others => '0');
     signal font_pa_d  : std_logic := '0';
     signal font_cnt_d : unsigned(10 downto 0) := (others => '0');
@@ -765,7 +772,7 @@ begin
                -- con la llegada del dato de la BSRAM de fuente (font_row_d).
                std_logic_vector(to_unsigned(256, 11) + font_cnt_d2);
 
-    process (init_phase, init_cnt, col_cnt, init_done, cpu_wr_data, font_row_d, font_color, setup_latch)
+    process (init_phase, init_cnt, col_cnt, init_done, cpu_wr_data, font_row_d, font_color_in, setup_latch)
         variable t  : integer range 0 to 7;
         variable r  : integer range 0 to 7;
         variable p0 : std_logic_vector(7 downto 0);
@@ -785,12 +792,12 @@ begin
             wr_data <= (others => '0');
         elsif init_phase = 4 then
             -- FUENTE: expandir el byte 1bpp de font_arr (font_row_d) a 2bpp
-            -- planar. El color de la fuente lo elige font_color:
+            -- planar. El color de la fuente lo elige font_color_in ($D818):
             --   plano0 = byte AND MASK_LO[color]
             --   plano1 = byte AND MASK_HI[color]
             --   (se ejecuta igual en init de arranque y en setup)
-            wr_data(7 downto 0)  <= font_row_d and MASK_LO(to_integer(unsigned(font_color)));
-            wr_data(15 downto 8) <= font_row_d and MASK_HI(to_integer(unsigned(font_color)));
+            wr_data(7 downto 0)  <= font_row_d and MASK_LO(to_integer(unsigned(font_color_in)));
+            wr_data(15 downto 8) <= font_row_d and MASK_HI(to_integer(unsigned(font_color_in)));
         elsif init_phase = 3 then
             -- 3 patrones de sprite 8x8, cada uno MULTICOLOR (plano 0 + plano 1).
             --   patron 0 (TILE 0): una "cara" (color 1 = cara, color 2 = ojos)

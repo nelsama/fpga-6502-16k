@@ -107,7 +107,14 @@ entity video_bus is
         --   $D817 (R): STATUS del setup -> bit4 = VIDEO_READY (1 = terminado),
         --              bit0 = BUSY (1 = setup/init en curso).
         setup_req_out : out std_logic;                   -- pulso (dominio CPU->video)
-        setup_busy_in : in  std_logic                    -- 1 = setup/init en curso
+        setup_busy_in : in  std_logic;                   -- 1 = setup/init en curso
+
+        -- COLOR DE LA FUENTE ($D818, W)
+        --   Elige la entrada de paleta del trazo de la fuente al re-expandirse:
+        --   0 = invisible, 1 = color 1, 2 = color 2, 3 = color 3 (por defecto).
+        --   Escribirlo NO cambia la pantalla: hay que disparar SETUP ($D816)
+        --   (que limpia la VRAM) para que la fuente se re-expanda.
+        font_color_out : out std_logic_vector(1 downto 0)
     );
 end entity;
 
@@ -154,6 +161,11 @@ architecture rtl of video_bus is
     signal b3x_hi_r      : std_logic_vector(2 downto 0) := (others => '0');
     signal b3y_lo_r      : std_logic_vector(7 downto 0) := (others => '0');
     signal b3y_hi_r      : std_logic_vector(2 downto 0) := (others => '0');
+
+    -- Color de la fuente ($D818). Valor estable -> se toma directo en clk_vid,
+    -- como el scroll. Por defecto 3 (blanco), igual que antes de existir el
+    -- registro, asi el software antiguo no nota nada.
+    signal font_color_r  : std_logic_vector(1 downto 0) := "11";
 
     -- Latido de limpieza de status (pulso al leer $D803)
     signal clear_tgl  : std_logic := '0';
@@ -249,6 +261,8 @@ begin
                     b3y_lo_r <= cpu_data_in;
                 elsif cpu_addr = x"D812" then
                     b3y_hi_r <= cpu_data_in(2 downto 0);
+                elsif cpu_addr = x"D818" then
+                    font_color_r <= cpu_data_in(1 downto 0);
                 end if;
             end if;
         end if;
@@ -266,6 +280,9 @@ begin
     rl1_out <= raster_line1_r;
     b3x_out <= b3x_hi_r & b3x_lo_r;
     b3y_out <= b3y_hi_r & b3y_lo_r;
+
+    -- Color de la fuente ($D818)
+    font_color_out <= font_color_r;
 
     -- ========================================================================
     -- Captura de la escritura del CPU en clk_sys

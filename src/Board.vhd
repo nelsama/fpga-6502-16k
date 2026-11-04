@@ -92,6 +92,9 @@ architecture arch of Board is
     signal vid_setup_req  : std_logic;
     signal vid_setup_busy : std_logic;
 
+    -- Color de la fuente ($D818)
+    signal vid_font_color : std_logic_vector(1 downto 0);
+
     -- Generador de reloj 1 MHz para SID
     signal clk_1mhz         : std_logic := '0';
     signal clk_1mhz_counter : integer range 0 to 15 := 0;
@@ -294,7 +297,8 @@ begin
         pal_hi_out   => vid_pal_hi,
 
         setup_req_out => vid_setup_req,
-        setup_busy_in => vid_setup_busy
+        setup_busy_in => vid_setup_busy,
+        font_color_out => vid_font_color
     );
 
     video_core_inst : entity work.video_core
@@ -330,6 +334,8 @@ begin
 
         setup_req   => vid_setup_req,
         setup_busy  => vid_setup_busy,
+
+        font_color_in => vid_font_color,
 
         tmds_c0_p => hdmi_tmds_c0_p_out,
         tmds_c0_n => hdmi_tmds_c0_n_out,
