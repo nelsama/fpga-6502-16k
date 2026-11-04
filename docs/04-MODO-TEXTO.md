@@ -108,9 +108,10 @@ El array se declara de **9 bits** para que Gowin lo mapee en **un solo bloque**
 > como referencia por si se retoma (está bloqueado por falta de CLS, ver
 > `docs/informe-optimizacion-resultados.md`).
 
-**Estado real:** la fase de expansión genera **una sola copia**. `font_color` está
-fijo a `"11"`, así que `plano0 = plano1 = byte` del glifo, y el trazo de **todas**
-las letras es `pixcode 11` → `pal_bg[pal][3]`.
+**Estado real:** la fase de expansión genera **una sola copia**. El color del trazo
+lo elige el registro `$D818` (`FONT_COLOR`), que **al arrancar vale 3**: entonces
+`plano0 = plano1 = byte` del glifo y el trazo de **todas** las letras es
+`pixcode 11` → `pal_bg[pal][3]`.
 
 | Copia | Tiles | Trazo | Estado |
 |-------|-------|-------|--------|
@@ -162,7 +163,7 @@ COPIA A (única) -> tiles 0..127  (tile = ASCII)
   pat_arr[ascii*8 + fila] = plano1 & plano0
 ```
 
-Máscaras según el color elegido (`font_color`, hoy fijo a **3** = blanco):
+Máscaras según el color elegido (`font_color_in`, registro `$D818`, **3 por defecto**):
 
 | color | MASK_LO | MASK_HI |
 |-------|---------|---------|
@@ -171,9 +172,13 @@ Máscaras según el color elegido (`font_color`, hoy fijo a **3** = blanco):
 | 2 | `$00` | `$FF` |
 | 3 | `$FF` | `$FF` |
 
-Con `font_color = "11"`, `plano0 = plano1 = byte`, así que el trazo es
-**`pixcode 11`** → `pal_bg[pal][3]`. Solo hay **un color de trazo por paleta**
-(4 en total, uno por paleta).
+Con `$D818 = 3` (valor al arrancar), `plano0 = plano1 = byte`, así que el trazo es
+**`pixcode 11`** → `pal_bg[pal][3]`. Con 1 o 2 el trazo pasa a color 1 o 2 de la
+paleta de la celda, y con 0 desaparece (transparente). El valor es **global** para
+toda la fuente; para cambiarlo hay que re-expandir con `SETUP` (`$D816`).
+
+Son **4 colores de trazo en total** (uno por valor de `$D818`), más los 4 de la
+paleta por celda, pero **no simultáneos**: `$D818` cambia los 4 a la vez.
 
 El fondo del glifo es `pixcode 00`, **transparente**: se ve el color de fondo
 global (`BG_COLOR`, entrada 15) o lo que haya detrás.

@@ -288,7 +288,8 @@ reescribibles por CPU):
 | 2 | transparente | verde (`$0A0`) | verde oscuro (`$060`) | verde |
 | 3 | transparente | gris (`$888`) | marrón (`$840`) | **BG_COLOR** (entrada 15) |
 
-La fuente se expande con **color 3**, así que el color 3 de cada paleta define el
+La fuente se expande con el **color de trazo** que indique el registro `$D818`
+(`FONT_COLOR`), que **al arrancar vale 3**; así el color 3 de cada paleta define el
 color del texto. **El color 0 es siempre transparente** (en todas las paletas). El
 color de la celda se elige con los bits 1:0 de `attr_arr`.
 

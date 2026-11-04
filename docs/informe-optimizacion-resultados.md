@@ -82,7 +82,7 @@ El intento C es la prueba: 9 CLS extra de lógica determinista no pueden colgar 
 
 ## 5. Estado real del byte de atributo y plan nuevo
 
-El RTL solo lee 3 bits del atributo: `attr_dout(1:0)` (paleta) y `attr_dout(4)` (sólido). Los bits 2, 3, 5, 6, 7 **llegan a la BSRAM y se descartan**. La doble copia de fuente de `docs/04-MODO-TEXTO.md` tampoco está implementada (`font_color = "11"` fijo).
+El RTL solo lee 3 bits del atributo: `attr_dout(1:0)` (paleta) y `attr_dout(4)` (sólido). Los bits 2, 3, 5, 6, 7 **llegan a la BSRAM y se descartan**. La doble copia de fuente de `docs/04-MODO-TEXTO.md` tampoco está implementada.
 
 ### Plan para crear ~140 CLS de margen (sin perder split ni sprites)
 
@@ -92,7 +92,7 @@ El RTL solo lee 3 bits del atributo: `attr_dout(1:0)` (paleta) y `attr_dout(4)` 
 | N2 | **`pal_spr` 16 → 8 entradas** (sprites de 4 a 2 paletas; fondo intacto) | ~96 CLS | bajo (sw re-mapea paletas) | propuesta |
 | N3 | Split 3 → 2 bandas | ~70 CLS | funcional | decisión |
 | N4 | `NSL` 8 → 6 | ~60–80 CLS (FF **y** comparadores del picker) | funcional | decisión |
-| N5 | `font_color` escribible por CPU (registro ya existe, solo exponerlo en `video_bus`) | 0 CLS en píxel | nulo | propuesta |
+| N5 | `font_color` escribible por CPU (registro ya existe, solo exponerlo en `video_bus`) | **medido: +4 CLS** | nulo | ✅ **aplicado ($D818)** |
 
 **N1 — aplicado y MEDIDO: 0 CLS.** Se reescribió el mux final para trabajar en
 12 bits (RGB444) y expandir a 24 una sola vez al final:
