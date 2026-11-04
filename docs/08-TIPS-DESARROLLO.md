@@ -96,9 +96,12 @@ horizontal, se activa `OVERFLOW` (bit 6 de `$D803`) y **algunos no se dibujan**
 El campo TILE del OAM es de **6 bits** → patrones 0-63. Si necesitas más gráficos,
 reutiliza o cambia patrones por escena (recargando la VRAM en el blank o con el setup).
 
-> ✅ **Los patrones arrancan vacíos.** El core ya no inicializa los patrones 0-2 con
-> formas de demo: arrancan a cero. Los 64 son utilizables sin más. Igual pasa con
-> los **tiles de fondo 0-7**, que también arrancan a cero.
+> ⚠️ **Los patrones 0-2 y los tiles de fondo 0-7 NO arrancan vacíos.** El core los
+> inicializa con **arte de demo** (cara, rombo y X; tierra, césped, árbol, nube…).
+> Los 64 patrones de sprite y los 256 de fondo son utilizables, pero **sobrescribe**
+> esos índices antes de usarlos.
+>
+> Un **SETUP** (`$D816`) sí los deja a cero.
 >
 > Las escrituras del CPU se ignoran mientras `init_done='0'` (arranque y setup
 > `$D816`), así que **espera `VIDEO_READY`** (bit 4 de `$D803`) antes de escribir.

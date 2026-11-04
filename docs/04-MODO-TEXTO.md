@@ -227,23 +227,41 @@ La VRAM se llena al encender en **5 fases**:
 |------|-----------|-----------|
 | 0 | `tile_arr` | tilemap: `$20` (espacio) en las 2048 celdas |
 | 1 | `attr_arr` | atributos: `0` (paleta de TEXTO) |
-| 2 | `pat_arr` (0..63) | patrones de tiles 0..7: **a cero** |
-| 3 | `spr_arr` | patrones de sprite 0..2: **a cero** |
-| 4 | `pat_arr` (`$00..$1FF`) | **expansión de la fuente** (copias A y B) |
+| 2 | `pat_arr` (0..63) | **8 tiles gráficos de demo** (tiles 0..7): tierra, césped, árbol, nube… |
+| 3 | `spr_arr` | **3 patrones de sprite de demo** (0..2): cara, rombo, X |
+| 4 | `pat_arr` (`$00..$1FF`) | **expansión de la fuente** |
 
-> Las fases 2 y 3 escriben ceros. Antes ponían arte de demo preincorporado
-> (8 tiles: tierra, césped, árbol, nube… y 3 sprites: cara, rombo, X), pero se
-> **eliminó**: no servía para nada. La fase 4 sobrescribía los tiles 0–7, y todo
-> el software escribe sus propios patrones antes de dibujar. Quitarlo liberó
-> bastante lógica, que en este chip era necesaria para poder colocar el diseño.
+> ⚠️ **Las fases 2 y 3 SÍ graban arte de demo en el arranque.** En algún momento
+> el manual dijo que se habían eliminado; **no es cierto**: el RTL actual las
+> mantiene (ver `video_core.vhd`, ramas `init_phase = 3` y `else`).
+>
+> Consecuencia: al arrancar, los tiles de fondo **0-7** y los patrones de sprite
+> **0-2** contienen dibujos. Un juego que use esos índices debe **sobrescribirlos**
+> con su propio arte después de `VIDEO_READY`.
+
+> **Matiz del SETUP:** cuando la secuencia la dispara `$D816`, la rama
+> `setup_latch` hace que esas fases escriban **ceros** (no el arte de demo). Ver §4.0.
 
 Al terminar la fase 4, se pone **`init_done = '1'`**.
 
-### 4.0 Un SETUP (`$D816`) se salta las fases 2 y 3
+### 4.0 Un SETUP (`$D816`) recorre todas las fases, pero escribe ceros
 
-Si la secuencia la dispara el CPU por `$D816`, tras limpiar tilemap y atributos
-(fases 0 y 1) **se salta directamente a la fase 4**, para no reiniciar los
-patrones de fondo ni de sprite: el juego puede tener ahí su propio arte.
+Si la secuencia la dispara el CPU por `$D816`, la FSM **recorre las mismas 5 fases**
+(0 → 1 → 2 → 3 → 4), pero la rama `setup_latch` hace que las fases 2 y 3 escriban
+**ceros** en vez del arte de demo.
+
+| | Arranque (reset) | SETUP (`$D816`) |
+|---|---|---|
+| Fase 2, tiles de fondo 0-7 | arte de demo | **ceros** |
+| Fase 3, patrones de sprite 0-2 | arte de demo | **ceros** |
+| Fase 4, fuente | expande | expande |
+
+Es decir: **un SETUP BORRA los patrones 0-7 de fondo y 0-2 de sprite**. Si el juego
+tiene arte propio en ese rango, lo pierde al hacer un SETUP y debe recargarlo.
+
+> ⚠️ Corrección: una versión anterior de este documento decía que el SETUP «se
+> salta las fases 2 y 3». **No es así**: las recorre (escribiendo ceros), porque el
+> `init_phase` avanza de 2 a 3 y de 3 a 4 sin condición ligada a `setup_latch`.
 
 ### 4.1 `init_done` y el puerto A
 
