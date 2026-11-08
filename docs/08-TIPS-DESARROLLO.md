@@ -66,6 +66,12 @@ OAM, scroll, paletas y bandas raster se **actualizan en VBLANK**. Cambiarlos a m
 del visible produce "tearing" (desgarro) o glitches. Espera el bit VBLANK de
 `$D803` antes de escribir.
 
+> ⚠️ **No es corrupción de memoria.** La VRAM nunca se corrompe al escribir durante el
+> barrido (puertos independientes). Lo que se ve es el **cambio a mitad de frame**:
+> la mitad de arriba con el valor viejo y la de abajo con el nuevo. La única excepción
+> real es durante el arranque y los `SETUP`, donde las escrituras se **ignoran**.
+> Ver Manual §1.1.
+
 ### 1.5 Orden de los sprites = prioridad
 
 El sprite de **menor índice en el OAM** tiene **mayor prioridad** (se dibuja delante).
