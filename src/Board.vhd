@@ -8,6 +8,10 @@ entity Board is
     port(   CLOCK_27_i: in std_logic;                   -- 27 Mhz
             cpu_clk_out : out std_logic;                    -- 3.375 MHz
             reset_in: in std_logic;
+            -- Pulsadores de uso general (pines 85 y 86). Sin antirrebote en
+            -- hardware: el software debe filtrar. Se leen en $C005.
+            btn_a : in std_logic;
+            btn_b : in std_logic;
             port_1 : inOut std_logic_vector(7 downto 0);
             port_2 : inOut std_logic_vector(7 downto 0);
             i2c_scl : inOut std_logic;
@@ -46,6 +50,13 @@ architecture arch of Board is
     signal port1_ce,port2_ce,conf_p1_ce,conf_p2_ce,ram_ce: std_logic;
     signal flags_ce : std_logic;
     signal flag_user : std_logic := '0';   -- 1 flag persistente (C004 bit0)
+    -- Pulsadores de uso general en $C005 (bits 1:0).
+    --   SIN antirrebote en hardware: el software debe filtrar los rebotes.
+    --   Se registran una vez (1 FF cada uno) para sincronizar con clk_sys.
+    signal btn_a_d   : std_logic := '1';
+    signal btn_b_d   : std_logic := '1';
+    signal btn_a_s   : std_logic := '1';
+    signal btn_b_s   : std_logic := '1';
     signal port_in1, port_in2 : std_logic_vector(7 downto 0) := "00000000";
     signal port_out1,port_out2 : std_logic_vector(7 downto 0);
     signal cfg_p1_reg,cfg_p2_reg: std_logic_vector(7 downto 0);
@@ -397,6 +408,7 @@ begin
         port1_in=>port_in1,
         port2_in=>port_in2,
         flags_in=>"0000000" & flag_user,
+        buttons_in=>"000000" & btn_b_s & btn_a_s,
         video_data_bus_in=>vid_cpu_data_out,
         data_bus_out=>data_bus,
         rom_addr_out=>rom_addr_out
@@ -454,6 +466,23 @@ begin
             if (flags_ce = '1') and (r_w = '0') then
                 flag_user <= data_bus(0);
             end if;
+        end if;
+    end process;
+
+    -- Pulsadores $C005 (bits 1:0), activos en BAJO (pulsador a GND con pull-up).
+    --   Dos registros en cascada sobre el flanco de SUBIDA de clk_sys:
+    --     - el primero quita metaestabilidad del pin asincrono
+    --     - el segundo da el valor estable
+    --   NO se usa el flanco de bajada: el mux del bus de datos ya lee en el
+    --   flanco de bajada, y registrando ahi mismo se producia una carrera
+    --   (se leia el valor viejo o indefinido).
+    btn_sync : process(system_clk)
+    begin
+        if rising_edge(system_clk) then
+            btn_a_d <= btn_a;
+            btn_b_d <= btn_b;
+            btn_a_s <= btn_a_d;
+            btn_b_s <= btn_b_d;
         end if;
     end process;
 

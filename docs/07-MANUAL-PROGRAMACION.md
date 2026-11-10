@@ -250,6 +250,56 @@ bitstream o al apagar la placa.
 > Para el mapa de memoria completo del sistema (RAM, ROM, GPIO, I2C, UART, timer,
 > SPI, SID), consulta `03-FORMATOS-Y-MEMORIA.md` §5.
 
+### 2.6 Pulsadores de uso general (`$C005`)
+
+Dos pulsadores conectados a los pines **85** y **86** de la FPGA se leen en `$C005`:
+
+| Dir | Bit | Pin | Nombre | Sin pulsar | Pulsado |
+|-----|-----|-----|--------|-----------:|--------:|
+| `$C005` | 0 | 86 | `BTN_A` | 1 | **0** |
+| `$C005` | 1 | 85 | `BTN_B` | 1 | **0** |
+| `$C005` | 7-2 | — | reservado | 0 | 0 |
+
+**Características:**
+
+| Aspecto | Valor |
+|---|---|
+| Sentido | **activos en bajo** (0 = pulsado) |
+| Conexión | pulsador a **GND**, pull-up **interno** (no hacen falta resistencias) |
+| Nivel | pines de **1,8 V** |
+| Antirrebote | ❌ **NO hay en hardware**: el software debe filtrar |
+| Latencia | 1 ciclo de `clk_sys` (6,75 MHz) |
+
+**Leer un pulsador:**
+
+```asm
+    LDA $C005
+    AND #$01        ; bit 0 = BTN_A  (usa #$02 para BTN_B)
+    BEQ btn_a_pulsado
+```
+
+**Filtrar los rebotes por software.** Un pulsador mecnico produce varios flancos en
+unos pocos milisegundos. Patrón típico:
+
+```asm
+; espera una pulsacion limpia de BTN_A y retorna
+wait_btn_a:
+    LDA $C005
+    AND #$01
+    BNE wait_btn_a      ; esperar el flanco de bajada
+    JSR delay_20ms      ; confirmar que sigue pulsado
+    LDA $C005
+    AND #$01
+    BNE wait_btn_a      ; rebote: volver a empezar
+    RTS
+```
+
+> ⚠️ **No esperes en bucle dentro de un juego**: bloquea el CPU. En un bucle de
+> juego, muestrea `$C005` una vez por frame y compara con el valor del frame
+> anterior para detectar el flanco.
+
+> El `reset` del sistema está en el pin **4** (`reset_in`), no en estos pulsadores.
+
 ---
 
 ## 3. Resolución, coordenadas y unidades

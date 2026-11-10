@@ -13,6 +13,7 @@ entity data_bus_mux is
             port1_in : in std_logic_vector(7 downto 0);
             port2_in : in std_logic_vector(7 downto 0);
             flags_in : in std_logic_vector(7 downto 0);   -- flag de usuario $C004
+            buttons_in : in std_logic_vector(7 downto 0); -- pulsadores $C005 (bits 1:0)
             video_data_bus_in : in std_logic_vector(7 downto 0);  -- STATUS del video ($D803)
 
             rom_addr_out : out std_logic_vector(15 downto 0);  -- NUEVO: dirección para la ROM
@@ -86,6 +87,11 @@ begin
             elsif (addr_in = x"C004" and r_w='1') then 
                 -- Flag de usuario persistente (bit0)
                 data_bus_out <= flags_in; 
+
+            elsif (addr_in = x"C005" and r_w='1') then
+                -- Pulsadores de uso general: bit0 = btn_a, bit1 = btn_b.
+                -- Activos en bajo (1 = sin pulsar). SIN antirrebote.
+                data_bus_out <= buttons_in;
 
             elsif ((addr_in = x"D803" or addr_in = x"D817") and r_w='1') then
                 -- Registros de LECTURA del video:

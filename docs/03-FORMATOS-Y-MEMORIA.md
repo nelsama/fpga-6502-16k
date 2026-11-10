@@ -320,6 +320,7 @@ Comparación: NES = 25, C64 = 16, Master System = 32.
 | `$8000–$BFFF` | 16 KB | ROM (programa) | Existente |
 | `$C000–$C003` | 4 B | GPIO | Existente |
 | **`$C004`** | **1 B** | **Flag de usuario (bit 0)** | **NUEVO** |
+| **`$C005`** | **1 B** | **Pulsadores de uso general (bits 1:0)** | **NUEVO** |
 | `$C010–$C017` | 8 B | I2C | Existente |
 | `$C020–$C023` | 4 B | UART | Existente |
 | `$C030–$C03F` | 16 B | Timer | Existente |
@@ -430,6 +431,35 @@ un bit de estado entre reinicios.
 - El proceso **no incluye `rst_n`**, de ahí que sobreviva al reset.
 - La lectura se resuelve en `src/Data_bus_mux.vhd`.
 - No guarda relación con el timer ni con ningún otro periférico.
+
+### 5.6 Pulsadores de uso general (`$C005`) — IMPLEMENTADO
+
+Dos pulsadores en los pines **85** y **86**, solo lectura:
+
+| Dir | Bit | Pin | Nombre | Sin pulsar | Pulsado |
+|-----|-----|-----|--------|-----------:|--------:|
+| `$C005` | 0 | 86 | `BTN_A` | 1 | **0** |
+| `$C005` | 1 | 85 | `BTN_B` | 1 | **0** |
+| `$C005` | 7-2 | — | reservado | 0 | 0 |
+
+- **Activos en bajo**: el pulsador va a GND y el pin tiene **pull-up interno**.
+- **Sin antirrebote en hardware**: filtrar por software (el rebote dura unos ms).
+- Escritura en `$C005` no tiene efecto.
+- Latencia: 1 ciclo de `clk_sys` (un registro de sincronización).
+
+```asm
+    LDA $C005
+    AND #$01        ; bit 0 = BTN_A (0 = pulsado)
+    BEQ btn_a_pulsado
+```
+
+**Notas de implementación:**
+
+- `src/Board.vhd`: puertos `btn_a` / `btn_b`, registrados en el flanco de bajada de
+  `system_clk` (`btn_a_d`, `btn_b_d`). **2 FF en total.**
+- `src/Data_bus_mux.vhd`: lectura en `$C005`.
+- `src/6502_board.cst`: pines 85 y 86, `LVCMOS18` con `PULL_MODE=UP` (banco 3 a 1,8 V).
+- El `reset` del sistema sigue en el pin 4 (`reset_in`), no en estos pulsadores.
 
 ---
 

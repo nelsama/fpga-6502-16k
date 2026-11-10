@@ -28,6 +28,14 @@ IO_PORT "cpu_clk_out" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
 // RESET (BANK3 - 1.8V)
 IO_LOC "reset_in" 4;
 IO_PORT "reset_in" IO_TYPE=LVCMOS18 PULL_MODE=UP;
+// PULSADORES DE USO GENERAL (BANK3 - 1.8V)
+//   Pulsador a GND + pull-up interno: 1 = sin pulsar, 0 = pulsado.
+//   SIN antirrebote en hardware: filtrar por software.
+//   Se leen en $C005: bit0 = btn_b, bit1 = btn_a.
+IO_LOC "btn_a" 86;
+IO_PORT "btn_a" IO_TYPE=LVCMOS18 PULL_MODE=UP;
+IO_LOC "btn_b" 85;
+IO_PORT "btn_b" IO_TYPE=LVCMOS18 PULL_MODE=UP;
 
 // CLOCK 27 MHz (BANK1 - 3.3V)
 IO_LOC "CLOCK_27_i" 52;
@@ -68,6 +76,8 @@ IO_LOC "audio_out_l" 76;
 IO_PORT "audio_out_l" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
 IO_LOC "audio_out_r" 77;
 IO_PORT "audio_out_r" IO_TYPE=LVCMOS33 DRIVE=8 BANK_VCCIO=3.3;
+
+
 
 // SPI (BANK2 - 3.3V)
 IO_LOC "spi_mosi" 37;
