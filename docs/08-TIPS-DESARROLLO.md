@@ -175,10 +175,10 @@ El reset (`rst_n`, botón S1) reinicia **CPU y vídeo**, pero **no toca la RAM**
 - La señal `reset` resultante es **activa-baja** y llega a CPU (`A6502.rst` → `not rst`),
   vídeo (`rst_n`), y todos los periféricos.
 
-### 2.5 La transparencia entre sprites NO cabe (límite de CLS)
+### 2.5 Transparencia entre sprites (no cabía al 98 % de CLS)
 
 Intentamos implementar transparencia real entre sprites (que un sprite transparente
-deje ver al de atrás, como NES). **No cabe** en el chip:
+deje ver al de atrás, como NES). **No cabía** con el diseño al 98 % de CLS:
 
 | Experimento | Resultado |
 |---|---|
@@ -187,18 +187,19 @@ deje ver al de atrás, como NES). **No cabe** en el chip:
 | Transparencia entre 3 sprites | ❌ 28 REG unPlaced |
 | Transparencia entre 2 sprites (funcional) | ❌ 25 REG unPlaced |
 
-**Conclusión:** el chip está al **~98% de CLS**. La transparencia funcional requiere
-liberar CLS (SID/timer/periféricos) o bajar `NSL`. Por ahora, se resuelve por
-software (§1.5).
+**Estado:** el diseño está ahora al **73 % de CLS**, así que se podría reintentar; no se
+ha vuelto a probar. Por ahora, se resuelve por software (§1.5).
 
-### 2.6 CLS es el recurso crítico, no FF ni LUT
+### 2.6 Usa RAM16 para los arrays; CLS no es 1:1 con los FF
 
-Aunque el conteo nominal de FFs parezca holgado, **cada FF y cada LUT viven dentro
-de una CLS**. El chip tiene **4320 CLS** y está al **98%**. Por eso:
+El chip tiene **4320 CLS** (hoy al **73 %**). Lecciones:
 
-- No se pueden "inventar" recursos apilando LUTs (una LUT no es un FF fiable).
-- Para añadir cualquier función nueva hay que **liberar CLS** de otro módulo.
-- El empaquetado **no es lineal**: añadir 8 FF puede costar 16 CLS o desbordar.
+- Un array leído con varias direcciones a la vez puede acabar duplicado en FF y RAM16
+  (le pasaba al OAM: ~1800 FF de más). Sepáralo en **un banco por campo**, con una
+  copia por puerto de lectura y `syn_ramstyle = "distributed_ram"`.
+- Comprueba en el informe por módulo (`impl/gwsynthesis/*_syn_rsc.xml`) que no aparecen
+  FF inesperados.
+- El empaquetado **no es lineal**: −1906 FF y −2627 de Logic dieron −1070 CLS.
 
 ### 2.7 "Píxel fantasma" / desalineación de pipeline
 
@@ -236,14 +237,14 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
 
 | Recurso | Uso | Total | Libre |
 |---|---|---|---|
-| **CLS** | **4203 (98%)** | 4320 | ~117 ⚠️ **crítico** |
-| Register (FF) | 4247 (64%) | 6693 | ~2400 |
-| LUT | 5713 | ~8640 | — |
+| CLS | 3138 (73%) | 4320 | 1182 |
+| Register (FF) | 2318 (35%) | 6693 | 4375 |
+| Logic (LUT + ALU + RAM16) | 4606 (54%) | 8640 | 4034 |
 | **BSRAM** | **26 (100%)** | 26 | **0** ⚠️ agotada |
 | DSP | 2 | 10 | 8 |
 | PLL | 1 | 2 | 1 |
 
-**Los dos recursos agotados: CLS (~98%) y BSRAM (100%).**
+**El recurso agotado es la BSRAM (100%).**
 
 ### 3.2 Dónde hay margen (si algún día hace falta)
 
@@ -262,7 +263,7 @@ La Tang Nano 9K tiene **8 MB de PSRAM embebida** (pines dedicados). Pero:
 
 - **Lenta:** ~12 ciclos por byte (vs 1 de la BSRAM) → **no sirve como VRAM** en tiempo real.
 - **Volátil:** arranca vacía → **no sirve como ROM** (no se puede precargar desde el bitstream).
-- **Su controlador consume CLS/LUT** → **empeora** el recurso crítico.
+- **Su controlador consume CLS/LUT** → consume parte del margen liberado.
 - Para el **CPU** sí podría usarse (tiene `enable` = wait-states), pero el balance de
   CLS es negativo si solo mueves los 16 KB actuales.
 
@@ -293,7 +294,7 @@ Son **normales** (clocks generados por lógica, no por PLL). No impiden la compi
 
 ### 4.4 `Failed to place with 'N REG(s) unPlaced'`
 
-Es el error de **recursos agotados** (CLS al límite). No es un bug de sintaxis: el
+Es el error de **recursos agotados** (salía con CLS al 98 %). No es un bug de sintaxis: el
 diseño **no cabe** en el chip. Hay que **liberar CLS** o reducir la función.
 
 ### 4.5 Herramientas de ensamblado (referencia rápida)
@@ -309,9 +310,9 @@ diseño **no cabe** en el chip. Hay que **liberar CLS** o reducir la función.
 
 ## Apéndice — Pendientes / ideas aparcadas
 
-- **Transparencia entre sprites:** requiere liberar CLS (ver §2.5). Aparcado.
-- **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabe con CLS al 98%.
+- **Transparencia entre sprites:** sin reintentar desde que hay margen de CLS (ver §2.5). Aparcado.
+- **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabía con CLS al 98 %; por reevaluar (hoy 73 %).
 - **Audio por HDMI:** factible en teoría (data islands + InfoFrames), pero no cabe
-  (CLS + 1 BSRAM). Hoy el audio sale por el DAC PWM (GPIO).
+  (pide 1 BSRAM y no queda ninguna). Hoy el audio sale por el DAC PWM (GPIO).
 - **Compatibilidad con TV (no monitor):** el core es DVI puro (TMDS sin InfoFrames);
-  solo va en monitores. Añadir HDMI real (AVI InfoFrame + audio) no cabe sin liberar.
+  solo va en monitores. Añadir HDMI real (AVI InfoFrame + audio) está por reevaluar: antes no cabía sin liberar.

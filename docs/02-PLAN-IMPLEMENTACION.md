@@ -280,7 +280,7 @@ actual es la ROM de prueba; el monitor original está respaldado en
 
 | Tarea | Estado |
 |-------|--------|
-| OAM en registros (32 sprites × 4 B) | ✅ |
+| OAM (32 sprites × 4 B en esta fase; hoy × 5 B en RAM16) | ✅ |
 | Line buffer (8 sprites por línea) | ✅ |
 | Transparencia (color 0) | ✅ |
 | Multicolor (4 colores por sprite, 2bpp) | ✅ |
@@ -301,7 +301,8 @@ prioridad, y un muñeco 16×16 compuesto que pasa delante/detrás de una casa.
 
 #### Arquitectura de sprites
 
-**OAM (`video_core.vhd`)** — en **registros** (no BSRAM, ahorra un bloque):
+**OAM (`video_core.vhd`)** — en **RAM distribuida RAM16** (no BSRAM, ahorra un bloque).
+En esta fase estaba en registros y cada sprite ocupaba 4 bytes; hoy ocupa 5 (`COLL_POINT`):
 
 | Campo | Bytes |
 |-------|-------|
@@ -314,7 +315,8 @@ prioridad, y un muñeco 16×16 compuesto que pasa delante/detrás de una casa.
  FLIP_Y  FLIP_X  PRIO    -       PALETA
 ```
 
-**Line buffer** — 8 sprites por línea (`NSL = 8`), en registros. Dos fases:
+**Line buffer** — 8 sprites por línea (`NSL = 8`): X y escala en registros,
+el resto en RAM16 (originalmente todo en registros). Dos fases:
 
 1. **Blank** (`h_cnt` 0..31): barrer los 32 sprites del OAM, guardar los que cruzan
    la línea actual (X, tile, paleta, prio, fila).
@@ -388,7 +390,8 @@ El sistema de sprites costó ~+800 LUTs y +1 bloque BSRAM (banco de patrones de 
 
 1. **La BSRAM se agotó** al usar un segundo puerto de lectura de patrones (`pat2`,
    duplicaba 2 bloques). Solución: banco de patrones de sprite propio y pequeño.
-2. **El OAM en registros** evita gastar un bloque BSRAM (solo 64-128 bytes).
+2. **El OAM fuera de BSRAM** evita gastar un bloque. Hoy está en RAM16: como array
+   en registros acababa costando ~1800 FF (ver el informe de optimización, §7).
 3. **El hit flag de hardware NO cabe**: comparar todos los pares de 32 sprites pide
    >15.000 LUTs (el chip tiene 8.640). La colisión se hace por **software**.
 4. **La prioridad por índice de OAM** funciona de serie (menor índice gana entre

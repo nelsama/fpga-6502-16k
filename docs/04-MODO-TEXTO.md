@@ -105,7 +105,7 @@ El array se declara de **9 bits** para que Gowin lo mapee en **un solo bloque**
 ### 2.5 Dos copias de la fuente con distinto color de trazo — ❌ NO IMPLEMENTADO
 
 > ⚠️ **Esta sección describe un diseño previsto que NO está en el RTL.** Se deja
-> como referencia por si se retoma (está bloqueado por falta de CLS, ver
+> como referencia por si se retoma (se bloqueó con el diseño al 98 % de CLS, hoy al 73 %; ver
 > `docs/informe-optimizacion-resultados.md`).
 
 **Estado real:** la fase de expansión genera **una sola copia**. El color del trazo
@@ -134,7 +134,7 @@ La copia B vive en `ASCII OR $80`, así que para dibujar una `A` con el trazo en
 entrada 1 de la paleta se escribiría el tile `$41 OR $80 = $C1`.
 
 **Por qué no se implementó:** cuesta ~3 FF de pipeline más comparadores, y el
-diseño está al 98 % de CLS. Los tres intentos de añadir color de texto fallaron
+diseño estaba entonces al 98 % de CLS (hoy al 73 %, sin reintentar). Los tres intentos de añadir color de texto fallaron
 (ver el informe de optimización).
 
 ## 3. Expansión 1bpp → 2bpp (fase de inicialización)
@@ -392,7 +392,7 @@ La Fase 7 costó **~+70 LUTs** (lógica de expansión y mux) y **+1 bloque BSRAM
 | Fuente de 96 caracteres ASCII imprimibles | ✅ |
 | Color fijo (blanco, paleta 0) | ✅ |
 | Color de trazo global cambiable (`$D818`) | ✅ |
-| **Color de texto por celda** (más colores simultáneos) | ⏳ bloqueado: +9 CLS cuelga el arranque. Ver el informe de optimización |
+| **Color de texto por celda** (más colores simultáneos) | ⏳ sin reintentar: con el diseño al 98 % de CLS, +9 CLS colgaba el arranque; hoy está al 73 %. Ver el informe de optimización |
 | **Cursor / scroll de texto** | ⏳ pendiente (software) |
 | **Integración con el monitor** | ⏳ requiere espacio en ROM (llena) |
 | Fuente estilo C64/retro exacta | ⏳ opcional (sustituir `mk_font.py`) |

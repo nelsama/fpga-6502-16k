@@ -144,7 +144,7 @@ bits** para otros fines (ver informes de optimización).
 
 ## 3. Byte de flags de sprite (OAM) — IMPLEMENTADO
 
-OAM de **32 entradas** × **5 bytes**, en **registros** (no BSRAM):
+OAM de **32 entradas** × **5 bytes**, en **RAM distribuida RAM16** (no BSRAM):
 
 | Offset | Campo | Descripción |
 |--------|-------|-------------|
@@ -476,7 +476,7 @@ Arreglos BSRAM direccionados por separado. La VRAM son **6 bloques**:
 | **Fuente (`font_arr`)** | **2048×9** | **768 (96×8), 1bpp** | **1** |
 | **Total** | | | **6** |
 
-> El **OAM NO está en BSRAM**: son 32 sprites × 4 bytes en registros.
+> El **OAM NO está en BSRAM**: son 32 sprites × 5 bytes en RAM distribuida (RAM16).
 
 Presupuesto medido del diseño completo: **26/26 BSRAM** (8 del stack de la CPU, 12 del
 ROM, 6 de la VRAM). **No queda ningún bloque libre.**

@@ -220,7 +220,7 @@ bits del `$D801`. Cada una tiene su propio espacio de direcciones (empieza en 0)
 - El banco de **fuente** (los glifos del modo texto) es una **memoria aparte**, no
   direccionable por este puerto desde el CPU; se copia a los patrones de fondo en el
   arranque (ver §9).
-- El OAM **no tiene “dirección de patrón”: son registros sueltos**, no un array 2D;
+- El OAM **no tiene “dirección de patrón”**: es una memoria propia, fuera de la VRAM;
   su dirección es simplemente el índice de byte (0..159).
 
 ### 2.5 Registros de sistema: flag de usuario (`$C004`)
@@ -1742,12 +1742,10 @@ wait_setup:
 | Setup de VRAM (`$D816`) | limpia + re-expande fuente | ~120-275 µs; durante `BUSY` se ignoran escrituras CPU a VRAM/OAM |
 | Overscan del monitor | variable | las filas 0 y 29 pueden recortarse según el monitor |
 
-> **Sobre los 8 sprites por línea:** es un **límite duro de este bitstream** (chip
-> GW1NR-9), no una elección arbitraria. El line buffer de sprites ocupa registros
-> y el chip ya está al **~98% de CLS** (celdas lógicas). Subir a 9 o 10 sprites por
-> línea **no pasa el placement** de Gowin (`Failed to place with N REG(s)
-> unPlaced`). Para ampliarlo habría que **liberar CLS** de otro módulo (SD, SID,
-> UART) o migrar el line buffer a BSRAM (que también está al 100%).
+> **Sobre los 8 sprites por línea:** es el **límite de este bitstream** (`NSL = 8`
+> en `video_core.vhd`). Antes subir a 9 o 10 no pasaba el placement porque el diseño
+> estaba al 98 % de CLS; tras mover el OAM y el line buffer a RAM16 está al **73 %**.
+> Ampliarlo no se ha probado y cambiaría el comportamiento (`OVERFLOW`).
 
 > **Sobre los patrones de sprite 0-2:** el arranque del core los **graba con arte de
 > demo** (cara, rombo y X), así que **no** están a cero. No están reservados: **los
