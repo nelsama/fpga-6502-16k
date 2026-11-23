@@ -168,4 +168,8 @@ Fmax estimado por Gowin del dominio de 27 MHz: de 22,8 a 39,3 MHz (SDC vacío).
 
 **Verificación:** las fórmulas se comprobaron exhaustivamente y el prototipo se
 probó en la placa (más de 8 sprites por línea, colisión, escala 2x y flips, SD).
-No se ha hecho simulación ciclo a ciclo contra el RTL anterior.
+Simulación ciclo a ciclo (GHDL 6.0.0) de `video_core` contra el RTL anterior:
+4.499.139 ciclos de 27 MHz con RGB, sincronismos, STATUS y BUSY idénticos, con
+sprites y escrituras aleatorias, setup y reset. Un error introducido a propósito
+(FLIP_Y de un sprite) sí se detectó. No se simuló el resto de la placa ni las
+direcciones de OAM mayores de 159.
