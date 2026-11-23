@@ -5,6 +5,9 @@
 **Commits:** base `bd5e160` → optimización aplicada `109fc5f`.
 **Fecha:** noviembre de 2026.
 
+
+> **Actualización:** las conclusiones «FF y CLS son ~1:1», «solo ahorra quitar FF vivos» y «el diseño no acepta añadidos» quedan superadas por la sección 7.
+
 ---
 
 ## 1. Recursos: antes y después (medido)
@@ -143,3 +146,26 @@ por-celda sigue sin entrar.
 | `bd5e160` | Base original que funciona |
 | `ac34350` | Arreglo del mapa de caracteres de la fuente C64 (`.` salía como `M`) |
 | `109fc5f` | `coll_flag` → 1 bit sticky (−31 FF, −30 CLS) |
+
+---
+
+## 7. OAM y line buffer en RAM distribuida
+
+| Recurso | Antes | Solo OAM | OAM + line buffer |
+|---|---:|---:|---:|
+| Logic | 7233 | 5043 | **4606** |
+| Register | 4224 | 2656 | **2318** |
+| RAM16 | 126 | 32 | **41** |
+| CLS | 4208 (98 %) | 3509 (82 %) | **3138 (73 %)** |
+| BSRAM | 26 / 26 | 26 / 26 | 26 / 26 |
+
+Fmax estimado por Gowin del dominio de 27 MHz: de 22,8 a 39,3 MHz (SDC vacío).
+
+- **OAM:** el array lineal de 160 bytes se sintetizaba duplicado (~1800 FF más
+  120 RAM16). Ahora hay un banco de 32 entradas por campo y una copia por puerto.
+- **Line buffer:** una resta por sprite en vez de dos comparadores; los datos
+  que no se comparan salen de RAM16.
+
+**Verificación:** las fórmulas se comprobaron exhaustivamente y el prototipo se
+probó en la placa (más de 8 sprites por línea, colisión, escala 2x y flips, SD).
+No se ha hecho simulación ciclo a ciclo contra el RTL anterior.

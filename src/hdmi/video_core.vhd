@@ -308,44 +308,63 @@ architecture rtl of video_core is
     signal spr_lo      : std_logic_vector(7 downto 0) := (others => '0');
 
     -- ========================================================================
-    -- OAM EN REGISTROS (Fase 5 ampliada) -- no consume BSRAM
+    -- OAM EN RAM DISTRIBUIDA (RAM16) -- no consume BSRAM
     --   32 sprites de 8x8. Cada sprite ocupa 5 bytes:
     --     +0 X (0..255), +1 Y (0..255), +2 TILE, +3 FLAGS, +4 COLL_POINT
     --   FLAGS: bit7 FLIP_Y, bit6 FLIP_X, bit5 PRIO, bit4 SCALE2X, bits3:0 PALETA.
     --   COLL_POINT: punto de colision sprite<->tile. byte = dy(7:4) & dx(3:0)?
     --               Se usa offset libre: bits 2:0 = dx (0..7), bits 5:3 = dy (0..7).
-    --   160 registros de 8 bits.
+    --   Un banco de 32 entradas por campo, con una copia por puerto de lectura.
+    --   OJO: como array lineal de 160 bytes Gowin lo duplicaba en FF y RAM16.
     -- ========================================================================
-    type oam_t is array (0 to 159) of std_logic_vector(7 downto 0);
-    signal oam_reg : oam_t := (others => (others => '0'));
-
+    type oam8_t is array (0 to 31) of std_logic_vector(7 downto 0);
+    type oam6_t is array (0 to 31) of std_logic_vector(5 downto 0);
+    type oam2_t is array (0 to 31) of std_logic_vector(1 downto 0);
+    attribute syn_ramstyle : string;
+    -- copia A: puerto de lectura del evaluador de sprites (indice oam_scan)
+    signal oa_x : oam8_t := (others => (others => '0'));
+    attribute syn_ramstyle of oa_x : signal is "distributed_ram";
+    signal oa_y : oam8_t := (others => (others => '0'));
+    attribute syn_ramstyle of oa_y : signal is "distributed_ram";
+    signal oa_t : oam6_t := (others => (others => '0'));
+    attribute syn_ramstyle of oa_t : signal is "distributed_ram";
+    signal oa_f : oam8_t := (others => (others => '0'));
+    attribute syn_ramstyle of oa_f : signal is "distributed_ram";
+    -- copia B: puerto de lectura de la colision (indice coll_idx)
+    signal ob_x : oam8_t := (others => (others => '0'));
+    attribute syn_ramstyle of ob_x : signal is "distributed_ram";
+    signal ob_y : oam8_t := (others => (others => '0'));
+    attribute syn_ramstyle of ob_y : signal is "distributed_ram";
+    signal ob_f : oam2_t := (others => (others => '0'));
+    attribute syn_ramstyle of ob_f : signal is "distributed_ram";
+    signal ob_c : oam6_t := (others => (others => '0'));
+    attribute syn_ramstyle of ob_c : signal is "distributed_ram";
+    signal oam_we    : std_logic;
+    signal oam_spr   : unsigned(4 downto 0);   -- vid_addr / 5
+    signal oam_fld   : unsigned(2 downto 0);   -- vid_addr mod 5
     -- ========================================================================
     -- LINE BUFFER DE SPRITES (hasta 8 sprites por linea)
     --   Durante el blank se recolectan los sprites que cruzan la linea; luego,
     --   en el barrido visible, se comparan todos contra el pixel actual.
-    --   Cada entrada: X, tile, paleta, fila (todo en registros).
-    --   NSL=8 es el MAXIMO que entra: el chip esta al ~98% de CLS y subir a 9
-    --   o 10 desborda el placement (REG sin colocar). Ver manual §13.
+    --   Cada entrada: X, tile, paleta, fila. X y escala en registros; el resto en RAM16.
+    --   NSL=8: limite de 8 sprites por linea (comportamiento definido).
     -- ========================================================================
     constant NSL : integer := 8;   -- sprites maximos por linea
 
-    type lb_x_t   is array (0 to NSL-1) of unsigned(8 downto 0);   -- X de 9 bits (0..319+)
-    -- attr: tile(6) + prio(1) + flipx(1) + flipy(1) + pal(3 rsv) = 12 bits
-    --   bit 11..6 = tile
-    --   bit 5     = prio
-    --   bit 4     = flipx
-    --   bit 3     = flipy
-    --   bit 2..0  = reservado (paleta se guarda aparte para simplificar)
-    type lb_attr_t is array (0 to NSL-1) of std_logic_vector(11 downto 0);
-    type lb_pal_t  is array (0 to NSL-1) of std_logic_vector(3 downto 0);
-    type lb_row_t is array (0 to NSL-1) of unsigned(2 downto 0);
-    type lb_scale_t is array (0 to NSL-1) of std_logic;   -- 1 = sprite a 2x
-
+    type lb_x_t   is array (0 to NSL-1) of unsigned(8 downto 0);
+    type lb_pay_t is array (0 to 15) of std_logic_vector(16 downto 0);
+    --   bit 16..11 = tile | 10 = prio | 9 = flipx | 8..7 = paleta
+    --   bit 6..4   = fila | 3..0 = X(3:0) (basta para el desplazamiento 0..15)
     signal lb_x    : lb_x_t := (others => (others => '0'));
-    signal lb_attr : lb_attr_t := (others => (others => '0'));
-    signal lb_pal  : lb_pal_t := (others => (others => '0'));
-    signal lb_row  : lb_row_t := (others => (others => '0'));
-    signal lb_scale: lb_scale_t := (others => '0');
+    signal lb_scale: std_logic_vector(NSL-1 downto 0) := (others => '0');
+    signal lb_pay  : lb_pay_t := (others => (others => '0'));
+    attribute syn_ramstyle of lb_pay : signal is "distributed_ram";
+    signal lb_we   : std_logic;
+    signal lb_din  : std_logic_vector(16 downto 0);
+    signal lb_dout : std_logic_vector(16 downto 0);
+    signal lb_sel  : unsigned(3 downto 0);
+    signal ev_sx   : unsigned(8 downto 0);
+    signal ev_scale: std_logic;
     signal lb_n    : unsigned(3 downto 0) := (others => '0');  -- cuantos hay
 
     -- Indicador de "line buffer listo": se pone a 1 cuando el barrido del OAM
@@ -359,9 +378,9 @@ architecture rtl of video_core is
 
     -- Seleccion durante el barrido visible: se elige el sprite de mayor
     -- prioridad (menor indice en el line buffer) que cubre el pixel actual.
-    signal lb_pick_x    : unsigned(8 downto 0) := (others => '0');   -- X de 9 bits
+    signal lb_pick_x    : unsigned(3 downto 0) := (others => '0');   -- X de 9 bits
     signal lb_pick_tile : std_logic_vector(5 downto 0) := (others => '0');
-    signal lb_pick_pal  : std_logic_vector(3 downto 0) := (others => '0');
+    signal lb_pick_pal  : std_logic_vector(1 downto 0) := (others => '0');
     signal lb_pick_row  : unsigned(2 downto 0) := (others => '0');
     signal lb_pick_prio : std_logic := '0';   -- 1 = sprite DETRAS del fondo
     signal lb_pick_fx   : std_logic := '0';   -- flip X
@@ -373,16 +392,16 @@ architecture rtl of video_core is
     -- (la BSRAM de patrones tiene 1 ciclo de latencia; sin este retardo, en el
     --  borde entre dos sprites distintos se mezcla el patron de uno con la X
     --  del otro -> linea de 1 pixel entre sprites compuestos).
-    signal lb_pick_x_d    : unsigned(8 downto 0) := (others => '0');   -- X de 9 bits
+    signal lb_pick_x_d    : unsigned(3 downto 0) := (others => '0');   -- X de 9 bits
     signal lb_pick_fx_d   : std_logic := '0';
     signal lb_pick_scale_d: std_logic := '0';
     signal lb_pick_ok_d   : std_logic := '0';
-    signal x0_log_d       : unsigned(8 downto 0) := (others => '0');
+    signal x0_log_d       : unsigned(3 downto 0) := (others => '0');
     -- paleta del sprite retrasada 2 ciclos para alinearla con spr_pixcode
     -- (etapa A, N+2). Sin esto, la paleta (combinacional) se combinaba con un
     -- pixel de 2 ciclos antes -> parte del sprite cambiaba de color y parte no.
-    signal spr_pal_a      : std_logic_vector(3 downto 0) := (others => '0');
-    signal spr_pal_b      : std_logic_vector(3 downto 0) := (others => '0');
+    signal spr_pal_a      : std_logic_vector(1 downto 0) := (others => '0');
+    signal spr_pal_b      : std_logic_vector(1 downto 0) := (others => '0');
 
     signal line_y       : unsigned(7 downto 0) := (others => '0');
 
@@ -947,6 +966,49 @@ begin
     --     "11" vid_spr=1  -> patrones de sprite: pat_hi=0 retiene plano 0,
     --                        pat_hi=1 escribe la palabra completa
     -- ========================================================================
+    -- ---- Escritura del OAM: direccion lineal -> (sprite, campo) ----
+    process (vid_addr)
+        variable h, sum, q5 : integer range 0 to 127;
+    begin
+        -- a = 16h+l  ->  a/5 = 3h + (h+l)/5 ;  a mod 5 = (h+l) mod 5
+        h   := to_integer(unsigned(vid_addr(7 downto 4)));
+        sum := h + to_integer(unsigned(vid_addr(3 downto 0)));
+        if    sum >= 20 then q5 := 4;
+        elsif sum >= 15 then q5 := 3;
+        elsif sum >= 10 then q5 := 2;
+        elsif sum >= 5  then q5 := 1;
+        else                 q5 := 0;
+        end if;
+        oam_fld <= resize(to_unsigned(sum, 5) - to_unsigned(q5 * 5, 5), 3);
+        oam_spr <= resize(to_unsigned(h * 3 + q5, 7), 5);
+    end process;
+    oam_we <= '1' when rst_n = '1' and vid_we = '1' and init_done = '1'
+                   and vid_area = "11" and vid_spr = '0'
+                   and unsigned(vid_addr(7 downto 5)) < 5 else '0';
+    process (clk_pixel)
+    begin
+        if rising_edge(clk_pixel) then
+            if oam_we = '1' and oam_fld = 0 then
+                oa_x(to_integer(oam_spr)) <= vid_data;
+                ob_x(to_integer(oam_spr)) <= vid_data;
+            end if;
+            if oam_we = '1' and oam_fld = 1 then
+                oa_y(to_integer(oam_spr)) <= vid_data;
+                ob_y(to_integer(oam_spr)) <= vid_data;
+            end if;
+            if oam_we = '1' and oam_fld = 2 then
+                oa_t(to_integer(oam_spr)) <= vid_data(5 downto 0);
+            end if;
+            if oam_we = '1' and oam_fld = 3 then
+                oa_f(to_integer(oam_spr)) <= vid_data;
+                ob_f(to_integer(oam_spr)) <= vid_data(4) & vid_data(2);
+            end if;
+            if oam_we = '1' and oam_fld = 4 then
+                ob_c(to_integer(oam_spr)) <= vid_data(5 downto 0);
+            end if;
+        end if;
+    end process;
+
     process (clk_pixel)
         variable we_t   : std_logic;
         variable we_a   : std_logic;
@@ -996,7 +1058,7 @@ begin
                         -- area "11"
                         if vid_spr = '0' then
                             -- OAM (registros, 32 sprites x 5 bytes = 160)
-                            oam_reg(to_integer(unsigned(vid_addr(7 downto 0)))) <= vid_data;
+                            null;   -- OAM: ver proceso de escritura del OAM
                         else
                             -- patrones de SPRITE
                             if vid_hi = '0' then
@@ -1059,7 +1121,7 @@ begin
         variable oy  : integer;
         variable cix : integer;
         variable osp2 : std_logic;
-        variable ocp  : std_logic_vector(7 downto 0);
+        variable ocp  : std_logic_vector(5 downto 0);
     begin
         if rising_edge(clk_pixel) then
             if rst_n = '0' then
@@ -1089,13 +1151,11 @@ begin
                         -- fin del barrido
                         coll_phase <= 0;
                     else
-                        cix := to_integer(coll_idx);
-                        -- Leer el OAM del sprite actual UNA sola vez.
-                        --   X de 9 bits: byte X + bit 8 en FLAGS(2)
-                        ox := to_integer(unsigned(oam_reg(cix*5 + 3)(2) & oam_reg(cix*5 + 0)));
-                        oy := to_integer(unsigned(oam_reg(cix*5 + 1)));
-                        osp2 := oam_reg(cix*5 + 3)(4);
-                        ocp  := oam_reg(cix*5 + 4);
+                        cix := to_integer(coll_idx(4 downto 0));
+                        ox  := to_integer(unsigned(std_logic_vector'(ob_f(cix)(0) & ob_x(cix))));
+                        oy  := to_integer(unsigned(ob_y(cix)));
+                        osp2 := ob_f(cix)(1);
+                        ocp  := ob_c(cix);
 
                         -- (COLISION SPRITE<->TILE con auto-escala C+)
                         sdx := unsigned(ocp(2 downto 0));
@@ -1204,145 +1264,92 @@ begin
     --   Fase 2 (visible): recorrer el line buffer combinacionalmente y elegir
     --   el primer sprite (menor indice) que cubre el pixel actual.
     --
-    --   El OAM esta en registros, asi que el barrido es rapido (1 sprite/ciclo).
+    --   El OAM esta en RAM distribuida (lectura asincrona): el barrido es rapido (1 sprite/ciclo).
     -- ========================================================================
     line_y <= y0_log(7 downto 0);
 
     -- ---- Fase 1: llenar el line buffer durante el blank ----
+    process (oam_scan, oa_x, oa_y, oa_t, oa_f, line_y, lb_n, h_cnt, rst_n)
+        variable n   : integer range 0 to 31;
+        variable d   : unsigned(8 downto 0);
+        variable f   : std_logic_vector(7 downto 0);
+        variable row : unsigned(2 downto 0);
+    begin
+        n := to_integer(oam_scan(4 downto 0));
+        f := oa_f(n);
+        -- d = line_y - sy ; bit 8 = negativo. line_y <= 239, asi que un
+        -- sy >= 248 nunca da d >= 0: el filtro "sy < 248" queda implicito.
+        d := resize(line_y, 9) - resize(unsigned(oa_y(n)), 9);
+        if f(4) = '1' then row := d(3 downto 1); else row := d(2 downto 0); end if;
+        if f(7) = '1' then row := not row; end if;
+        ev_sx    <= unsigned(std_logic_vector'(f(2) & oa_x(n)));
+        ev_scale <= f(4);
+        lb_din <= oa_t(n) & f(5) & f(6) & f(1 downto 0) & std_logic_vector(row) & oa_x(n)(3 downto 0);
+        lb_we <= '0';
+        if rst_n = '1' and h_cnt /= 0 and oam_scan < 32 and lb_n < NSL
+           and d(8 downto 4) = 0 and (f(4) = '1' or d(3) = '0') then
+            lb_we <= '1';
+        end if;
+    end process;
+
     process (clk_pixel)
-        variable sy     : unsigned(7 downto 0);
-        variable sx     : unsigned(8 downto 0);   -- X de 9 bits (0..319+)
-        variable stile  : std_logic_vector(5 downto 0);
-        variable spal   : std_logic_vector(3 downto 0);
-        variable sscale : std_logic;
-        variable span   : unsigned(7 downto 0);   -- alto en lineas (8 o 16)
-        variable k      : integer range 0 to NSL;
     begin
         if rising_edge(clk_pixel) then
             if rst_n = '0' then
                 lb_n     <= (others => '0');
                 oam_scan <= (others => '0');
                 lb_ready <= '0';
-            else
-                if h_cnt = 0 then
-                    -- nueva linea: reiniciar la recoleccion y LIMPIAR el buffer
-                    -- (las entradas no usadas no deben conservar datos viejos)
-                    lb_n     <= (others => '0');
-                    oam_scan <= (others => '0');
-                    lb_ready <= '0';
-                    for k in 0 to NSL-1 loop
-                        lb_x(k)    <= (others => '0');
-                        lb_attr(k) <= (others => '0');
-                        lb_pal(k)  <= (others => '0');
-                        lb_row(k)  <= (others => '0');
-                        lb_scale(k) <= '0';
-                    end loop;
-                elsif oam_scan < 32 then
-                    -- evaluar el sprite 'oam_scan' (5 bytes por sprite)
-                    sy     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 1));
-                    -- X de 9 bits: byte X + bit 8 en FLAGS(2)
-                    sx     := unsigned(oam_reg(to_integer(oam_scan) * 5 + 3)(2) & oam_reg(to_integer(oam_scan) * 5 + 0));
-                    stile  := oam_reg(to_integer(oam_scan) * 5 + 2)(5 downto 0);
-                    spal   := oam_reg(to_integer(oam_scan) * 5 + 3)(3 downto 0);
-                    sscale := oam_reg(to_integer(oam_scan) * 5 + 3)(4);  -- SCALE2X
-
-                    -- alcance vertical: 8 lineas (1x) o 16 lineas (2x)
-                    if sscale = '1' then
-                        span := to_unsigned(16, 8);
-                    else
-                        span := to_unsigned(8, 8);
-                    end if;
-
-                    -- si cruza la linea y hay hueco, guardarlo
-                    if (sy < 248) and (sy <= line_y) and (sy + span > line_y)
-                       and (lb_n < NSL) then
-                        lb_x(to_integer(lb_n)) <= sx;
-                        -- attr: tile(6) + prio + flipx + flipy
-                        lb_attr(to_integer(lb_n)) <= stile &
-                                                     oam_reg(to_integer(oam_scan) * 5 + 3)(5) &
-                                                     oam_reg(to_integer(oam_scan) * 5 + 3)(6) &
-                                                     oam_reg(to_integer(oam_scan) * 5 + 3)(7) &
-                                                     "000";
-                        lb_pal(to_integer(lb_n)) <= spal;
-                        lb_scale(to_integer(lb_n)) <= sscale;
-                        -- fila del patron:
-                        --   1x: row = line_y - sy            (0..7)
-                        --   2x: row = (line_y - sy) / 2      (0..7)
-                        if sscale = '1' then
-                            if oam_reg(to_integer(oam_scan) * 5 + 3)(7) = '1' then
-                                lb_row(to_integer(lb_n)) <= 7 - resize((line_y - sy)/2, 3);
-                            else
-                                lb_row(to_integer(lb_n)) <= resize((line_y - sy)/2, 3);
-                            end if;
-                        else
-                            -- fila: si FLIP_Y, invertir (7 - row)
-                            if oam_reg(to_integer(oam_scan) * 5 + 3)(7) = '1' then
-                                lb_row(to_integer(lb_n)) <= 7 - resize(line_y - sy, 3);
-                            else
-                                lb_row(to_integer(lb_n)) <= resize(line_y - sy, 3);
-                            end if;
-                        end if;
-                        lb_n <= lb_n + 1;
-                    end if;
-                    oam_scan <= oam_scan + 1;
-                else
-                    -- barrido terminado: el buffer es estable
-                    lb_ready <= '1';
+            elsif h_cnt = 0 then
+                lb_n     <= (others => '0');
+                oam_scan <= (others => '0');
+                lb_ready <= '0';
+            elsif oam_scan < 32 then
+                if lb_we = '1' then
+                    lb_n <= lb_n + 1;
                 end if;
+                oam_scan <= oam_scan + 1;
+            else
+                lb_ready <= '1';
+            end if;
+        end if;
+    end process;
+
+    process (clk_pixel)
+    begin
+        if rising_edge(clk_pixel) then
+            if lb_we = '1' then
+                lb_x(to_integer(lb_n(2 downto 0)))     <= ev_sx;
+                lb_scale(to_integer(lb_n(2 downto 0))) <= ev_scale;
+                lb_pay(to_integer(lb_n))               <= lb_din;
             end if;
         end if;
     end process;
 
     -- ---- Fase 2: elegir el sprite del line buffer que cubre el pixel ----
-    --   Solo actua cuando lb_ready='1' (buffer completamente lleno) y considera
-    --   UNICAMENTE las primeras 'lb_n' entradas validas. Las restantes pueden
-    --   contener datos de lineas anteriores y NO deben leerse.
-    process (x0_log, lb_x, lb_attr, lb_pal, lb_row, lb_scale, lb_n, lb_ready)
-        variable found : std_logic;
-        variable i     : integer range 0 to NSL;
-        variable lim   : integer range 0 to NSL;
-        variable xwid  : unsigned(8 downto 0);
+    --   Los comparadores dan el indice; el resto de datos sale de RAM16.
+    process (x0_log, lb_x, lb_scale, lb_n, lb_ready)
+        variable d : unsigned(9 downto 0);
     begin
-        found := '0';
-        lb_pick_ok   <= '0';
-        lb_pick_x    <= (others => '0');
-        lb_pick_tile <= (others => '0');
-        lb_pick_pal  <= (others => '0');
-        lb_pick_row  <= (others => '0');
-        lb_pick_prio <= '0';
-        lb_pick_fx   <= '0';
-        lb_pick_fy   <= '0';
-        lb_pick_scale<= '0';
-        lim := to_integer(lb_n);
-        if lim > NSL then
-            lim := NSL;
-        end if;
-        if lb_ready = '1' then
-            i := 0;
-            while (i < lim) and (found = '0') loop
-                -- ancho en pantalla: 8 px (1x) o 16 px (2x)
-                if lb_scale(i) = '1' then
-                    xwid := to_unsigned(16, 9);
-                else
-                    xwid := to_unsigned(8, 9);
-                end if;
-                if (resize(unsigned(lb_x(i)), 9) <= x0_log) and
-                   (resize(unsigned(lb_x(i)), 9) + xwid > x0_log) then
-                    found := '1';
-                    lb_pick_ok   <= '1';
-                    lb_pick_x    <= lb_x(i);
-                    lb_pick_tile <= lb_attr(i)(11 downto 6);
-                    lb_pick_prio <= lb_attr(i)(5);
-                    lb_pick_fx   <= lb_attr(i)(4);
-                    lb_pick_fy   <= lb_attr(i)(3);
-                    lb_pick_scale<= lb_scale(i);
-                    lb_pick_pal  <= lb_pal(i);
-                    lb_pick_row  <= lb_row(i);
-                end if;
-                i := i + 1;
-            end loop;
-        end if;
+        lb_pick_ok    <= '0';
+        lb_pick_scale <= '0';
+        lb_sel        <= (others => '0');
+        for i in NSL-1 downto 0 loop      -- el menor indice gana
+            d := resize(x0_log, 10) - resize(lb_x(i), 10);
+            if lb_ready = '1' and i < to_integer(lb_n) and d(9 downto 4) = 0
+               and (lb_scale(i) = '1' or d(3) = '0') then
+                lb_pick_ok    <= '1';
+                lb_pick_scale <= lb_scale(i);
+                lb_sel        <= to_unsigned(i, 4);
+            end if;
+        end loop;
     end process;
+    lb_dout      <= lb_pay(to_integer(lb_sel));
+    lb_pick_tile <= lb_dout(16 downto 11);
+    lb_pick_prio <= lb_dout(10);
+    lb_pick_fx   <= lb_dout(9);
+    lb_pick_pal  <= lb_dout(8 downto 7);
+    lb_pick_row  <= unsigned(lb_dout(6 downto 4));
+    lb_pick_x    <= unsigned(lb_dout(3 downto 0));
 
     -- direccion del patron del sprite: sprite(6 bits) * 8 + fila  (0..511)
     spr_pat_addr <= resize(shift_left(resize(unsigned(lb_pick_tile), 9), 3), 9)
@@ -1351,9 +1358,8 @@ begin
     -- pixel del sprite (SECUENCIAL, 2 ciclos, alineado con la etapa 2 del fondo):
     --   Etapa A: sx = x0_log - lb_pick_x, extraer bit del patron (spr_pat_data).
     process (clk_pixel)
-        variable sx   : unsigned(8 downto 0);
+        variable sx   : unsigned(3 downto 0);
         variable idx  : integer range 0 to 7;
-        variable xp9  : unsigned(8 downto 0);
     begin
         if rising_edge(clk_pixel) then
             if rst_n = '0' then
@@ -1376,16 +1382,13 @@ begin
                 lb_pick_fx_d    <= lb_pick_fx;
                 lb_pick_scale_d <= lb_pick_scale;
                 lb_pick_ok_d    <= lb_pick_ok;
-                x0_log_d        <= x0_log;
+                x0_log_d        <= x0_log(3 downto 0);
 
                 -- Etapa A: calcular a partir de spr_pat_data (ya alineado)
                 spr_active  <= '0';
                 spr_pixcode <= (others => '0');
-                xp9 := resize(lb_pick_x_d, 9);
-                if lb_pick_ok_d = '1' and (x0_log_d >= xp9) and
-                   ((lb_pick_scale_d = '0' and (x0_log_d < xp9 + 8)) or
-                    (lb_pick_scale_d = '1' and (x0_log_d < xp9 + 16))) then
-                    sx  := x0_log_d - xp9;
+                if lb_pick_ok_d = '1' then
+                    sx  := x0_log_d - lb_pick_x_d;
                     if lb_pick_scale_d = '1' then
                         -- 2x: dos pixeles de pantalla por uno de origen (sx/2).
                         idx := to_integer(sx(3 downto 1));

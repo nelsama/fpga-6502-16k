@@ -9,7 +9,7 @@
 --   pattern   : 2048 x 16  (2048 usadas)  patrones de FONDO, 2bpp planar -> 256 tiles
 --   spr_pat   : 512 x 16   (64 usadas)    patrones de SPRITE, 2bpp planar
 --
---   El OAM (32 sprites x 5 bytes) NO esta aqui: se implementa en registros
+--   El OAM (32 sprites x 5 bytes) NO esta aqui: se implementa en RAM16
 --   dentro de video_core, porque son solo 160 bytes y no justifican un bloque
 --   BSRAM entero de 2 KB.
 --
