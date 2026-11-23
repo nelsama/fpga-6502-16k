@@ -365,6 +365,14 @@ architecture rtl of video_core is
     signal lb_sel  : unsigned(3 downto 0);
     signal ev_sx   : unsigned(8 downto 0);
     signal ev_scale: std_logic;
+    -- TRANSPARENCIA ENTRE SPRITES: mascara de opacidad de la fila de cada hueco
+    --   (bit 0 = pixel mas a la izquierda, con FLIP_X ya aplicado).
+    --   Se lee del banco de patrones al llenar el line buffer (1 ciclo despues).
+    type lb_op_t is array (0 to NSL-1) of std_logic_vector(7 downto 0);
+    signal lb_op   : lb_op_t := (others => (others => '0'));
+    signal op_we   : std_logic := '0';
+    signal op_slot : unsigned(2 downto 0) := (others => '0');
+    signal op_fx   : std_logic := '0';
     signal lb_n    : unsigned(3 downto 0) := (others => '0');  -- cuantos hay
 
     -- Indicador de "line buffer listo": se pone a 1 cuando el barrido del OAM
@@ -379,12 +387,9 @@ architecture rtl of video_core is
     -- Seleccion durante el barrido visible: se elige el sprite de mayor
     -- prioridad (menor indice en el line buffer) que cubre el pixel actual.
     signal lb_pick_x    : unsigned(3 downto 0) := (others => '0');   -- X de 9 bits
-    signal lb_pick_tile : std_logic_vector(5 downto 0) := (others => '0');
     signal lb_pick_pal  : std_logic_vector(1 downto 0) := (others => '0');
-    signal lb_pick_row  : unsigned(2 downto 0) := (others => '0');
     signal lb_pick_prio : std_logic := '0';   -- 1 = sprite DETRAS del fondo
     signal lb_pick_fx   : std_logic := '0';   -- flip X
-    signal lb_pick_fy   : std_logic := '0';   -- flip Y
     signal lb_pick_scale: std_logic := '0';   -- 1 = dibujar a 2x
     signal lb_pick_ok   : std_logic := '0';
 
@@ -1325,18 +1330,43 @@ begin
         end if;
     end process;
 
-    -- ---- Fase 2: elegir el sprite del line buffer que cubre el pixel ----
+    -- ---- Opacidad: el patron pedido en el ciclo N llega en N+1. El ultimo
+    --   (oam_scan = 31) se guarda en el mismo flanco que activa lb_ready.
+    process (clk_pixel)
+        variable o : std_logic_vector(7 downto 0);
+    begin
+        if rising_edge(clk_pixel) then
+            op_we   <= lb_we;
+            op_slot <= lb_n(2 downto 0);
+            op_fx   <= lb_din(9);
+            o := spr_pat_data(15 downto 8) or spr_pat_data(7 downto 0);
+            if op_we = '1' then
+                for b in 0 to 7 loop
+                    if op_fx = '1' then
+                        lb_op(to_integer(op_slot))(b) <= o(b);
+                    else
+                        lb_op(to_integer(op_slot))(b) <= o(7 - b);
+                    end if;
+                end loop;
+            end if;
+        end if;
+    end process;
+
+    -- ---- Fase 2: elegir el primer sprite OPACO que cubre el pixel ----
     --   Los comparadores dan el indice; el resto de datos sale de RAM16.
-    process (x0_log, lb_x, lb_scale, lb_n, lb_ready)
+    process (x0_log, lb_x, lb_scale, lb_n, lb_ready, lb_op)
         variable d : unsigned(9 downto 0);
+        variable p : unsigned(2 downto 0);
     begin
         lb_pick_ok    <= '0';
         lb_pick_scale <= '0';
         lb_sel        <= (others => '0');
         for i in NSL-1 downto 0 loop      -- el menor indice gana
             d := resize(x0_log, 10) - resize(lb_x(i), 10);
+            if lb_scale(i) = '1' then p := d(3 downto 1); else p := d(2 downto 0); end if;
             if lb_ready = '1' and i < to_integer(lb_n) and d(9 downto 4) = 0
-               and (lb_scale(i) = '1' or d(3) = '0') then
+               and (lb_scale(i) = '1' or d(3) = '0')
+               and lb_op(i)(to_integer(p)) = '1' then
                 lb_pick_ok    <= '1';
                 lb_pick_scale <= lb_scale(i);
                 lb_sel        <= to_unsigned(i, 4);
@@ -1344,16 +1374,16 @@ begin
         end loop;
     end process;
     lb_dout      <= lb_pay(to_integer(lb_sel));
-    lb_pick_tile <= lb_dout(16 downto 11);
     lb_pick_prio <= lb_dout(10);
     lb_pick_fx   <= lb_dout(9);
     lb_pick_pal  <= lb_dout(8 downto 7);
-    lb_pick_row  <= unsigned(lb_dout(6 downto 4));
     lb_pick_x    <= unsigned(lb_dout(3 downto 0));
 
     -- direccion del patron del sprite: sprite(6 bits) * 8 + fila  (0..511)
-    spr_pat_addr <= resize(shift_left(resize(unsigned(lb_pick_tile), 9), 3), 9)
-                    + resize(lb_pick_row, 9);
+    --   Mientras se llena el line buffer (lb_ready = '0') el banco de patrones
+    --   esta libre: se usa para leer la opacidad del sprite evaluado.
+    spr_pat_addr <= unsigned(lb_dout(16 downto 11)) & unsigned(lb_dout(6 downto 4)) when lb_ready = '1' else
+                    unsigned(lb_din(16 downto 11)) & unsigned(lb_din(6 downto 4));
 
     -- pixel del sprite (SECUENCIAL, 2 ciclos, alineado con la etapa 2 del fondo):
     --   Etapa A: sx = x0_log - lb_pick_x, extraer bit del patron (spr_pat_data).

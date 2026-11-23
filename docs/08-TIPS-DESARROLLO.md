@@ -78,10 +78,8 @@ El sprite de **menor índice en el OAM** tiene **mayor prioridad** (se dibuja de
 Cuando dos sprites se solapan, gana el de índice menor. **Ordena el OAM** según lo
 que quieras que se vea delante.
 
-> ⚠️ **No hay transparencia entre sprites**: si el sprite de delante tiene un hueco
-> (color 0) sobre otro sprite, en ese hueco se ve el **fondo/BG_COLOR**, no el sprite
-> de atrás. Esto es una limitación del bitstream actual (ver §2.5). Para solapamientos
-> donde importe, dibuja la zona como **un solo sprite compuesto** o usa tiles.
+> **Hay transparencia entre sprites**: en los huecos (color 0) del sprite de delante se
+> ve el de atrás. Es automática (Manual §6.2c).
 
 ### 1.6 La colisión sprite↔sprite es por software
 
@@ -175,24 +173,16 @@ El reset (`rst_n`, botón S1) reinicia **CPU y vídeo**, pero **no toca la RAM**
 - La señal `reset` resultante es **activa-baja** y llega a CPU (`A6502.rst` → `not rst`),
   vídeo (`rst_n`), y todos los periféricos.
 
-### 2.5 Transparencia entre sprites (no cabía al 98 % de CLS)
+### 2.5 Transparencia entre sprites (implementada)
 
-Intentamos implementar transparencia real entre sprites (que un sprite transparente
-deje ver al de atrás, como NES). **No cabía** con el diseño al 98 % de CLS:
-
-| Experimento | Resultado |
-|---|---|
-| Guardar 1 bit de opacidad (8 FF) | ❌ 16 REG unPlaced |
-| Transparencia entre 2 sprites (sondeo, +44 CLS) | ✅ compila (99%) |
-| Transparencia entre 3 sprites | ❌ 28 REG unPlaced |
-| Transparencia entre 2 sprites (funcional) | ❌ 25 REG unPlaced |
-
-**Estado:** el diseño está ahora al **73 % de CLS**, así que se podría reintentar; no se
-ha vuelto a probar. Por ahora, se resuelve por software (§1.5).
+Al llenar el line buffer se lee la fila de patrón de cada sprite y se guarda una
+**máscara de opacidad de 8 bits** por hueco (64 FF). El selector elige el primer sprite
+opaco. Coste medido: **+102 Logic, +69 FF, +99 CLS, 0 BSRAM**. Con el diseño al 98 % de
+CLS no cabía; fue posible tras mover el OAM y el line buffer a RAM16.
 
 ### 2.6 Usa RAM16 para los arrays; CLS no es 1:1 con los FF
 
-El chip tiene **4320 CLS** (hoy al **73 %**). Lecciones:
+El chip tiene **4320 CLS** (hoy al **75 %**). Lecciones:
 
 - Un array leído con varias direcciones a la vez puede acabar duplicado en FF y RAM16
   (le pasaba al OAM: ~1800 FF de más). Sepáralo en **un banco por campo**, con una
@@ -237,9 +227,9 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
 
 | Recurso | Uso | Total | Libre |
 |---|---|---|---|
-| CLS | 3138 (73%) | 4320 | 1182 |
-| Register (FF) | 2318 (35%) | 6693 | 4375 |
-| Logic (LUT + ALU + RAM16) | 4606 (54%) | 8640 | 4034 |
+| CLS | 3237 (75%) | 4320 | 1083 |
+| Register (FF) | 2387 (36%) | 6693 | 4306 |
+| Logic (LUT + ALU + RAM16) | 4708 (55%) | 8640 | 3932 |
 | **BSRAM** | **26 (100%)** | 26 | **0** ⚠️ agotada |
 | DSP | 2 | 10 | 8 |
 | PLL | 1 | 2 | 1 |
@@ -310,8 +300,7 @@ diseño **no cabe** en el chip. Hay que **liberar CLS** o reducir la función.
 
 ## Apéndice — Pendientes / ideas aparcadas
 
-- **Transparencia entre sprites:** sin reintentar desde que hay margen de CLS (ver §2.5). Aparcado.
-- **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabía con CLS al 98 %; por reevaluar (hoy 73 %).
+- **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabía con CLS al 98 %; por reevaluar (hoy 75 %).
 - **Audio por HDMI:** factible en teoría (data islands + InfoFrames), pero no cabe
   (pide 1 BSRAM y no queda ninguna). Hoy el audio sale por el DAC PWM (GPIO).
 - **Compatibilidad con TV (no monitor):** el core es DVI puro (TMDS sin InfoFrames);

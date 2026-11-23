@@ -862,9 +862,9 @@ Tres reglas que conviene tener claras antes de diseñar los gráficos:
 valen 0 (`pixcode 00`), ese píxel **no existe**: se ve lo que haya detrás (fondo o
 `BG_COLOR`). No depende del fondo ni de otros sprites.
 
-**2. Solo se dibuja UN sprite por píxel: el de menor índice.** Cuando varios sprites
-cubren la misma X en la misma línea, el line buffer guarda los primeros `N` (hasta 8)
-en orden de índice, y el píxel lo gana **el de índice más bajo**.
+**2. Solo se dibuja UN sprite por píxel: el OPACO de menor índice.** El line buffer
+guarda los primeros 8 sprites de la línea en orden de índice; en cada píxel gana el
+de índice más bajo **cuyo píxel no sea color 0**.
 
 | Píxel del sprite de índice bajo | Píxel del de índice alto | Se ve |
 |---|---|---|
@@ -873,23 +873,19 @@ en orden de índice, y el píxel lo gana **el de índice más bajo**.
 | transparente | opaco | **el de índice alto** |
 | transparente | transparente | **fondo / `BG_COLOR`** |
 
-**3. NO hay transparencia entre sprites.** Donde el sprite de delante es transparente,
-se ve el **fondo**, nunca el sprite de detrás. El hardware no compone dos capas de
-sprite: es fiel a la NES.
+**3. SÍ hay transparencia entre sprites.** Donde el sprite de delante es transparente
+se ve el sprite de detrás, y si no hay ninguno opaco, el fondo. Es automática: no usa
+registros ni bits nuevos.
 
-```
-   Sprite A (delante, índice 0)      Sprite B (detrás, índice 5)
-   ┌───┬───┐                          ┌───┬───┐
-   │ █ │   │   el hueco de A         │ █ │ █ │   B tiene píxel aquí
-   ├───┼───┤   muestra el FONDO,     ├───┼───┤
-   │ █ │ █ │   no el sprite B  ⚠️     │ █ │ █ │
-   └───┴───┘                          └───┴───┘
-```
+- **`PRIO`:** primero se elige el sprite y después se aplica **su** `PRIO` frente al
+  fondo. Un sprite opaco de índice bajo con `PRIO=1` sigue ocultando a los de índice
+  mayor, aunque a él lo tape el fondo.
+- **Cambiar un patrón de sprite a mitad de pantalla:** la opacidad se lee al principio
+  de cada línea física; la línea en curso puede usar la anterior.
+- No cambia el límite de 8 por línea: un sprite totalmente transparente también cuenta.
 
-**Cómo se resuelve en la práctica (técnica de la NES):**
+**Consejos de diseño:**
 
-- Diseña los personajes como **rejillas de sprites 8×8 que no se pisen**. Donde un
-  personaje "invade" al otro (un puño, un arma), ese trozo es **una celda propia**.
 - Usa **contornos con esquinas transparentes** para que el solape se lea bien.
 - El orden visual se controla con el **índice del sprite** (menor = delante) y con
   **`PRIO`** (bit 5 de FLAGS) frente al fondo.
