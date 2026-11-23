@@ -287,6 +287,14 @@ Son **normales** (clocks generados por lógica, no por PLL). No impiden la compi
 Es el error de **recursos agotados** (salía con CLS al 98 %). No es un bug de sintaxis: el
 diseño **no cabe** en el chip. Hay que **liberar CLS** o reducir la función.
 
+### 4.4b Compila bien pero no arranca (pantalla azul, no lee la SD): `Place_Option`
+
+El arranque puede depender de la **colocación**. Con el mismo fuente, la versión con
+transparencia no arranca con `Place_Option = 0` y sí con `1`, que es el valor del proyecto
+(`impl/6502_board_v3_process_config.json`). Si tras un cambio la placa no arranca, prueba
+otro valor antes de buscar el fallo en la lógica. Causa sin confirmar; el sospechoso es
+el IP SPI de Gowin (3 latches que el análisis de tiempos no cubre).
+
 ### 4.5 Herramientas de ensamblado (referencia rápida)
 
 - **ca65:** `"D:/cc65/bin/ca65.exe" -t none f.asm -o f.o`
