@@ -13,7 +13,7 @@ Sipeed Tang Nano 9K (Gowin GW1NR-9).
 | 04 | [Modo Texto](04-MODO-TEXTO.md) | Segunda ROM de fuente (1bpp), expansión a 2bpp, uso desde 6502 |
 | 05 | [Análisis del Bitmap](05-ANALISIS-BITMAP.md) | Viabilidad, resoluciones, coste, decisión pendiente |
 | 06 | [Reporte del scroll](06-REPORTE-SCROLL.md) | Por qué costó, bug de raíz del video_bus, estado aparcado |
-| **07** | **[Manual de Programación](07-MANUAL-PROGRAMACION.md)** | **Guía para escribir juegos: registros, sprites, tiles, scroll, HUD, colisión, recetas y plantilla** |
+| **07** | **[Manual de Programación](07-MANUAL-PROGRAMACION.md)** | **Guía para escribir juegos: registros, sprites, tiles, scroll, HUD, colisión, recetas, plantilla y especificación exacta para el emulador (Apéndice B)** |
 | **08** | **[Tips de Desarrollo](08-TIPS-DESARROLLO.md)** | **Advertencias y atajos aprendidos: software 6502, VHDL, recursos del chip y compilación** |
 
 ## Resumen ejecutivo
@@ -25,14 +25,16 @@ eliminar ningún módulo existente.
 
 | Recurso | Uso final | Libre | ¿Alcanza? |
 |---------|-----------|-------|-----------|
-| Lógica | 6.409 (74%) | ~2.231 | ✅ |
+| Lógica | 4.785 (56%) | 3.855 | ✅ |
+| FF | 2.460 (37%) | 4.233 | ✅ |
+| CLS | 3.285 (77%) | 1.035 | ✅ |
 | BSRAM | 26/26 | 0 | ⚠️ **agotada** |
 | PLL | 1 | 1 | ✅ |
 | DSP | 2/10 | 8 | ✅ |
 
 **Estado: COMPLETO** ✅ — Fases 1–12 implementadas y validadas en hardware.
-El motor de vídeo soporta tiles multicolor, fondo transparente, sprites (line buffer,
-prioridad, flips X/Y, **escalado 2× por duplicación de píxeles**, **X de 9 bits**),
+El motor de vídeo soporta tiles multicolor, fondo transparente, sprites (line buffer de
+**12 por línea**, **transparencia entre sprites**, prioridad, flips X/Y, **escalado 2× por duplicación de píxeles**, **X de 9 bits**),
 STATUS (vblank/overflow/
 solid-hit/ready), **modo texto con fuente en BSRAM**, **scroll H/V** sobre mapa 64×32,
 **split de raster (3 bandas)**, y **colisión sprite↔tile sólido** con punto de

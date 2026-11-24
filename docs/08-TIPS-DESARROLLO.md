@@ -91,8 +91,8 @@ en RAM y compáralas tú. El hardware solo da:
 
 ### 1.7 No superes 12 sprites por línea
 
-Es un **límite duro del chip**. Con más de 12 sprites cruzando la misma línea
-horizontal, se activa `OVERFLOW` (bit 6 de `$D803`) y **algunos no se dibujan**
+Es el **límite de este bitstream** (`NSL`). Al llegar a 12 sprites en la misma línea
+se activa `OVERFLOW` (bit 6 de `$D803`); **del 13.º en adelante no se dibujan**
 (parpadeo/pérdida). Si tu juego tiene muchos objetos en una fila, usa **tiles**.
 
 ### 1.8 Máximo 64 patrones de sprite
@@ -177,7 +177,7 @@ El reset (`rst_n`, botón S1) reinicia **CPU y vídeo**, pero **no toca la RAM**
 
 Al llenar el line buffer se lee la fila de patrón de cada sprite y se guarda una
 **máscara de opacidad de 8 bits** por hueco (64 FF). El selector elige el primer sprite
-opaco. Coste medido: **+102 Logic, +69 FF, +99 CLS, 0 BSRAM**. Con el diseño al 98 % de
+opaco. Coste medido (con 8 huecos): **+102 Logic, +69 FF, +99 CLS, 0 BSRAM**. Con el diseño al 98 % de
 CLS no cabía; fue posible tras mover el OAM y el line buffer a RAM16.
 
 ### 2.6 Usa RAM16 para los arrays; CLS no es 1:1 con los FF

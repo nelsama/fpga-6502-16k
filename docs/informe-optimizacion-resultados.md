@@ -173,3 +173,19 @@ Simulación ciclo a ciclo (GHDL 6.0.0) de `video_core` contra el RTL anterior:
 sprites y escrituras aleatorias, setup y reset. Un error introducido a propósito
 (FLIP_Y de un sprite) sí se detectó. No se simuló el resto de la placa ni las
 direcciones de OAM mayores de 159.
+
+## 8. Transparencia entre sprites y 12 sprites por línea
+
+| Recurso | §7 | + transparencia | + 12 por línea |
+|---|---:|---:|---:|
+| Logic | 4606 | 4708 | **4785** |
+| Register | 2318 | 2387 | **2460** |
+| CLS | 3138 | 3209 | **3285 (77 %)** |
+| BSRAM | 26 / 26 | 26 / 26 | 26 / 26 |
+| Fmax 27 MHz | 39,3 | 33,1 | 33,2 |
+
+Columnas 2 y 3 con `Place_Option = 1` (ver Tips 4.4b).
+
+**Verificación:** 4.499.139 ciclos con píxeles y STATUS idénticos a un modelo VHDL
+independiente, y 4 escenas estáticas idénticas al modelo del Apéndice B del manual.
+Probado en la placa con `demo_spr12`.

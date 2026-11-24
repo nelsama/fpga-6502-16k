@@ -9,7 +9,9 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 2.8
+**Versión del manual:** 3.0 (2026-11-23). Novedades: 12 sprites por línea, transparencia
+entre sprites y comportamiento exacto de `OVERFLOW`; resumen en el Apéndice B.1.
+
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
 + texto + scroll + split de raster + colisión sprite↔tile + setup de VRAM por hardware).
 Si recompilas el hardware, anota aquí la versión del manual correspondiente.
@@ -33,6 +35,7 @@ Si recompilas el hardware, anota aquí la versión del manual correspondiente.
 13. [Limitaciones y buenas prácticas](#13-limitaciones-y-buenas-prácticas)
 14. [Esqueleto de juego](#14-esqueleto-de-juego)
 15. [Apéndice A — Chuletas de referencia](#apéndice-a--chuletas-de-referencia)
+16. [Apéndice B — Especificación para el emulador](#apéndice-b--especificación-para-el-emulador)
 
 ---
 
@@ -41,7 +44,7 @@ Si recompilas el hardware, anota aquí la versión del manual correspondiente.
 El vídeo funciona como un **coprocesador gráfico**. Tú (el programa) **no dibujas
 píxeles**: escribes **memoria de vídeo** (VRAM) y **registros**, y el vídeo se
 encarga de generar la imagen. Para ti es una caja negra: solo importan sus registros
-en `$D800`-`$D812` y la memoria de vídeo que llenas a través de ellos.
+en `$D800`-`$D818` y la memoria de vídeo que llenas a través de ellos.
 
 Tres capas, de atrás a delante:
 
@@ -396,8 +399,8 @@ Colores **RGB exactos** (24 bits, formato `#RRGGBB`). El valor es un nibble por 
 expande a 24 bits duplicando el nibble. Según eso, el valor `$F80` de la paleta 0
 es `#FF8800` (R=F, G=8, B=0 → `FF 88 00`), no un naranja genérico.
 
-Se selecciona con los **bits 1:0** de FLAGS del sprite (4 paletas; los bits 3:2 de
-FLAGS están reservados). El índice se forma igual que en el fondo:
+Se selecciona con los **bits 1:0** de FLAGS del sprite (4 paletas; el bit 2 es el
+bit 8 de X y el bit 3 se ignora). El índice se forma igual que en el fondo:
 `índice = (paleta << 2) | color`. Recuerda que el **color 0 del sprite también es
 transparente** (nunca se ve la columna "transparente"): donde el patrón del sprite
 tiene color 0, se ve lo que haya detrás (fondo o `BG_COLOR`).
@@ -882,7 +885,8 @@ registros ni bits nuevos.
   mayor, aunque a él lo tape el fondo.
 - **Cambiar un patrón de sprite a mitad de pantalla:** la opacidad se lee al principio
   de cada línea física; la línea en curso puede usar la anterior.
-- No cambia el límite de 12 por línea: un sprite totalmente transparente también cuenta.
+- **Límite de 12 por línea:** cuentan los sprites que cruzan la línea en Y, aunque sean
+  totalmente transparentes o estén fuera de pantalla en X.
 
 **Consejos de diseño:**
 
@@ -890,8 +894,8 @@ registros ni bits nuevos.
 - El orden visual se controla con el **índice del sprite** (menor = delante) y con
   **`PRIO`** (bit 5 de FLAGS) frente al fondo.
 
-> **Presupuesto:** máximo **12 sprites por línea**. Si se superan, se pierden y se
-> activa `OVERFLOW` (bit 6 de `$D803`). Dos personajes de 16×16 (2×2 sprites) ocupan
+> **Presupuesto:** máximo **12 sprites por línea**. Del 13.º en adelante se pierden;
+> `OVERFLOW` (bit 6 de `$D803`) se activa al llegar a 12. Dos personajes de 16×16 (2×2 sprites) ocupan
 > **2 sprites por línea cada uno**: sobran 8 para proyectiles y efectos.
 
 ### 6.3 Escribir un campo del OAM
@@ -1457,8 +1461,8 @@ cajas (AABB) de los objetos, cuyas posiciones ya tienes en RAM:
 > ⚠️ **Leer `$D803` no limpia `OVERFLOW` ni `SOLID_HIT`:**
 > - **`SOLID_HIT`**: se vuelve a evaluar al comenzar cada VBLANK y **se mantiene
 >   durante todo el frame**, hasta el siguiente VBLANK.
-> - **`OVERFLOW`**: se recalcula **en cada línea**. Leído en VBLANK no dice si hubo
->   desbordamiento durante la imagen; hay que leerlo mientras se dibuja.
+> - **`OVERFLOW`**: se recalcula **en cada línea**. Leído en VBLANK solo indica
+>   si la línea 239 está llena; para otra línea hay que leerlo mientras se dibuja (§B.5).
 >
 > Por tanto, simplemente revisa el bit que te interesa. Como son varios bits en un
 > solo registro, **guarda el byte en RAM una vez por frame** si necesitas consultar
@@ -1519,7 +1523,8 @@ reusando la misma máquina de inicialización que corre al arrancar. Es útil pa
    **ceros**. Aquí se diferencian del arranque, que graba arte de demo (§6.0).
 4. **Re-expande la fuente**: vuelve a copiar los glifos desde la ROM de fuente
    a los patrones `$20-$7F`, así el texto sigue disponible tras limpiar.
-5. **No toca**: RAM, ROM, paletas, scroll, bandas, ni el estado del CPU.
+5. **No toca**: RAM, ROM, **OAM**, patrones de fondo 8-31 y 128-255, patrones de sprite
+   3-63, paletas, scroll, bandas, ni el estado del CPU.
 
 > ⚠️ **Un SETUP borra el arte de los patrones 0-7 de fondo y 0-2 de sprite.** Si tu
 > juego los usa, recárgalos después del setup.
@@ -1550,8 +1555,8 @@ wait_setup:
 | Registro estado | lectura de `$D817`: bit0 = `BUSY`, bit4 = `VIDEO_READY` |
 | Duración | **~120-275 µs** (menos de 0.3 ms, ~1% de un frame) |
 | Bloqueante | no: el CPU da la orden y sigue; opcionalmente espera a `BUSY=0` |
-| Efecto colateral | limpia tilemap/atributos/patrones/sprites y re-expande la fuente |
-| No afectado | RAM, ROM, paletas, scroll, bandas, estado del CPU |
+| Efecto colateral | limpia tilemap, atributos, patrones de fondo 0-7 y de sprite 0-2; re-expande la fuente. **No borra el OAM** |
+| No afectado | OAM, RAM, ROM, paletas, scroll, bandas, estado del CPU |
 | Durante `BUSY=1` | escrituras del CPU a `$D800/$D801/$D802` y OAM **ignoradas** |
 
 Recomendaciones para la función:
@@ -1579,7 +1584,7 @@ Recomendaciones para la función:
 | `$D809-$D812` (bandas/raster) | ⚠️ Idealmente no | Igual; normalmente se fijan una vez al arrancar |
 | `$D808` (`MAP_STRIDE`) | — | Reservado; no escribir |
 | `$D816` (`SETUP`) | ⚠️ Mejor en VBLANK | Limpia la VRAM mientras corre; fuera de VBLANK puede rasgar ~1 frame |
-| `$D803` | solo lectura | `VBLANK`/`VIDEO_READY` combinacionales; `OVERFLOW`/`SOLID_HIT` del frame |
+| `$D803` | solo lectura | `VBLANK`/`VIDEO_READY` combinacionales; `SOLID_HIT` del último VBLANK; `OVERFLOW` de la línea (§B.5) |
 
 ---
 
@@ -1893,6 +1898,202 @@ byte_oam   = sprite*5 + campo            (campo 0..4)
 | `$D813/$D814/$D815` | W | Paleta (PTR / LO / HI); HI escribe y `PTR++` (satura en 31). Entrada 15 = `BG_COLOR` |
 | `$D816` | W | **Setup de VRAM** (escribir cualquier valor lo dispara) |
 | `$D817` | R | Estado del setup: BUSY(0), VIDEO_READY(4) |
+
+---
+
+## Apéndice B — Especificación para el emulador
+
+Comportamiento **exacto** del vídeo a partir de la versión 3.0 de este manual. Si algo
+del resto del manual pareciera contradecir este apéndice, manda el apéndice.
+
+> **Validación:** el modelo de §B.4 y las reglas de `OVERFLOW` y `SOLID_HIT` de §B.5 se
+> compararon con la simulación del VHDL en 4 escenas estáticas aleatorias (32 sprites,
+> escalas, flips, `PRIO`, scroll, 3 bandas y hasta 12 sprites por línea):
+> **0 diferencias** en 345.600 píxeles por escena. `OVERFLOW` se comprobó en mitad de
+> cada línea. No cubre escrituras a mitad de frame; §B.2 y §B.3 salen de leer el VHDL.
+
+### B.1 Qué cambia respecto a versiones anteriores
+
+| Cambio | Antes | Ahora | Qué tocar en el emulador |
+|---|---|---|---|
+| Sprites por línea | 8 | **12** | Límite del evaluador |
+| Solape de sprites | Ganaba el de menor índice aunque su píxel fuese transparente | Gana el **opaco** de menor índice | Seguir buscando si el píxel es color 0 |
+| `OVERFLOW` (`$D803` bit 6) | Se activaba a los 8 | Se activa a los **12** | Umbral; momento exacto en §B.5 |
+| Pulsadores `$C005` | No existían | bit0 = BTN_A, bit1 = BTN_B, **0 = pulsado** | Ver §2.6 |
+
+**No cambian:** direcciones y formato de registros, OAM, patrones, tilemap, atributos,
+paletas, scroll, bandas, `SOLID_HIT`, `SETUP`, fuente y tiempos de vídeo.
+
+La optimización interna (OAM y line buffer en otro tipo de memoria) **no es visible**
+para el programa: no hay nada que emular.
+
+### B.2 Tiempos
+
+| Magnitud | Valor |
+|---|---|
+| Reloj de píxel / CPU | 27 MHz / 3,375 MHz → **8 píxeles físicos por ciclo de CPU** |
+| Línea | 858 píxeles físicos (720 visibles) = 107,25 ciclos de CPU |
+| Frame | 525 líneas (480 visibles) = 450.450 píxeles = **56.306,25 ciclos de CPU** (59,94 Hz) |
+| `VBLANK` | líneas físicas 480-524 = 4.826,25 ciclos de CPU |
+| Píxel lógico | 2×2 físicos; márgenes izquierdo y derecho de 40 px físicos |
+| Init / `SETUP` | 4.956 píxeles ≈ 184 µs ≈ **620 ciclos de CPU** |
+
+### B.3 Memoria y estado inicial
+
+- **Dirección de VRAM** = `($D801 & 7) << 8 | $D800`. No se auto-incrementa.
+- **OAM:** solo cuentan los 8 bits bajos de la dirección (`$C0`-`$C7` equivalen).
+  Direcciones **≥ 160: se ignoran**. El CPU no puede leer el OAM ni la VRAM.
+- **OAM, bits ignorados:** `TILE` bits 7:6, `FLAGS` bit 3, `COLL_POINT` bits 7:6.
+- **Patrones** (fondo 2048 palabras, sprite 512): escribir el plano 0 solo guarda el byte
+  en un registro temporal; escribir el plano 1 graba la **palabra completa** en la
+  dirección vigente en ese momento. Hay **un temporal para fondo y otro para sprite**.
+- Mientras `BUSY=1` / `VIDEO_READY=0` se ignoran las escrituras a VRAM, OAM y patrones.
+  Paleta y registros de scroll/bandas sí se aceptan.
+
+| Estado | Al configurar la FPGA | Tras el botón de reset | Tras `SETUP` (`$D816`) |
+|---|---|---|---|
+| Tilemap | `$20` | `$20` | **0** |
+| Atributos | 0 | 0 | 0 |
+| Patrones de fondo 0-7 | arte de demo | arte de demo | **0** |
+| Patrones de fondo `$20`-`$7F` | fuente | fuente | fuente |
+| Resto de patrones de fondo | 0 | **se conservan** | **se conservan** |
+| Patrones de sprite 0-2 | arte de demo | arte de demo | **0** |
+| Patrones de sprite 3-63 | 0 | **se conservan** | **se conservan** |
+| OAM | 0 (32 sprites en 0,0) | **se conserva** | **se conserva** |
+| Paletas y `FONT_COLOR` | por defecto | **se conservan** | **se conservan** |
+| Scroll y bandas | 0 / `$FF` | 0 / `$FF` | se conservan |
+
+### B.4 Modelo de referencia (JavaScript)
+
+`spr[]` y `pat[]` son palabras de 16 bits: plano 0 en el byte bajo, plano 1 en el alto.
+`pal[0..15]` = fondo, `pal[16..31]` = sprite, en RGB444.
+
+```js
+// Evaluador: se ejecuta al empezar cada linea FISICA. y = linea logica 0..239.
+function slots(y) {
+  const r = [];
+  for (let n = 0; n < 32 && r.length < 12; n++) {      // orden de OAM; los demas se pierden
+    const o = oam.subarray(n*5, n*5+5), f = o[3], big = f >> 4 & 1;
+    const dy = y - o[1];                               // sin envoltura vertical
+    if (dy < 0 || dy >= (big ? 16 : 8)) continue;      // X NO influye: fuera de pantalla tambien cuenta
+    let row = big ? dy >> 1 : dy;
+    if (f & 0x80) row = 7 - row;                       // FLIP_Y
+    r.push({ x: o[0] | (f & 4) << 6,                   // X de 9 bits
+             big, fx: f >> 6 & 1, prio: f >> 5 & 1, pal: f & 3,
+             w: spr[(o[2] & 63) * 8 + row] });
+  }
+  return r;
+}
+
+// Primer sprite OPACO que cubre x (0..319). Si el pixel es color 0, sigue buscando.
+function sprPix(sl, x) {
+  for (const s of sl) {
+    let d = x - s.x;                                   // sin envoltura horizontal
+    if (d < 0 || d >= (s.big ? 16 : 8)) continue;
+    if (s.big) d >>= 1;
+    if (s.fx) d = 7 - d;                               // FLIP_X
+    const c = (s.w >> (15 - d) & 1) << 1 | (s.w >> (7 - d) & 1);
+    if (c) return { color: pal[16 + s.pal*4 + c], prio: s.prio };
+  }
+  return null;
+}
+
+// Frame completo, en pixeles fisicos (v = 0..479, h = 0..719).
+let band = R0 == 0xFF ? 1 : 0;                         // R0=$D809  R1=$D80E
+for (let v = 0; v < 480; v++) {
+  const y = v >> 1, [scx, scy] = [TOP, MID, BOT][band]; // TOP=$D80A.. MID=$D804.. BOT=$D80F..
+  const sl = slots(y);
+  for (let h = 0; h < 720; h++) {
+    let c = pal[15];                                   // BG_COLOR (y margenes)
+    if (h >= 40 && h < 680) {
+      const x = (h >> 1) - 20;
+      const wx = (x + scx) & 2047, wy = (y + scy) & 2047;
+      const cell = (wy >> 3 & 31) * 64 + (wx >> 3 & 63);
+      const w = pat[tile[cell]*8 + (wy & 7)], b = wx & 7;
+      const bc = (w >> (15 - b) & 1) << 1 | (w >> (7 - b) & 1);
+      const s = sprPix(sl, x);
+      if (s && !s.prio) c = s.color;                   // sprite delante
+      else if (bc)      c = pal[(attr[cell] & 3)*4 + bc];
+      else if (s)       c = s.color;                   // PRIO=1: en los huecos del fondo
+    }
+    pixel(v, h, c);
+  }
+  // Como mucho una transicion por linea fisica, al terminarla:
+  if (band == 0 && R0 != 0xFF && y >= R0) band = 1;
+  else if (band == 1 && R1 != 0xFF && y >= R1) band = 2;
+}
+```
+
+Detalles que se suelen pasar por alto:
+
+- **`PRIO`:** se aplica el del sprite **elegido**. Uno opaco de índice bajo con `PRIO=1`
+  oculta a los de índice mayor aunque a él lo tape el fondo.
+- **Un sprite sin ningún píxel opaco, o fuera de pantalla en X, ocupa hueco.**
+- **Bandas:** la transición ocurre al acabar la **primera** línea física de la línea
+  lógica `R`; la segunda línea física de `R` ya usa la banda nueva.
+- **Cuándo se leen los datos:** posición, flags, fila y máscara de opacidad del sprite,
+  en los primeros 34 píxeles físicos de cada línea. Los **colores** del patrón y las
+  paletas, al dibujar. Para emular a nivel de línea basta con leerlo todo al empezarla.
+- **Scroll:** el de la primera banda se captura al final del frame; el de las otras, en
+  su transición.
+
+### B.5 `STATUS` (`$D803`)
+
+Leer **no limpia nada**. Bits 3:0 = 0.
+
+| Bit | Regla exacta |
+|---|---|
+| 7 `VBLANK` | 1 en las líneas físicas 480-524 |
+| 6 `OVERFLOW` | `lleno(v) OR lleno(v-1)`, con `lleno(v)` = 12 sprites o más en esa línea física |
+| 5 `SOLID_HIT` | Se pone a 0 al empezar la línea 480, se recalcula en ~65 píxeles físicos (8 ciclos de CPU) y se mantiene hasta el siguiente `VBLANK` |
+| 4 `VIDEO_READY` | 0 durante init y `SETUP` |
+
+**`OVERFLOW` en detalle:**
+
+- Se activa con **12 exactos**, aunque no se pierda ninguno.
+- `lleno(v)` aparece dentro de los primeros 34 píxeles físicos de la línea, cuando el
+  evaluador encuentra el sprite número 12.
+- `lleno(v-1)` es el arrastre: el bit sigue a 1 durante toda la línea física siguiente.
+- El evaluador **no se detiene en `VBLANK`**: en las líneas 480-524 repite `y = 239`. Por
+  tanto, leído en `VBLANK` indica **solo** si la línea 239 está llena (con el OAM de ese
+  momento), no si hubo exceso en el frame.
+
+**`SOLID_HIT`** (con el OAM y el scroll vigentes al empezar la línea 480):
+
+```js
+let hit = 0;
+const [scx, scy] = [TOP, MID, BOT][band];              // ultima banda alcanzada
+for (let n = 0; n < 32; n++) {                         // los 32, sin filtrar por Y
+  const o = oam.subarray(n*5, n*5+5), X = o[0] | (o[3] & 4) << 6;
+  let dx = o[4] & 7, dy = o[4] >> 3 & 7;
+  if (o[3] & 0x10) { dx = dx == 7 ? 15 : dx*2; dy = dy == 7 ? 15 : dy*2; }
+  const px = (((X + dx) & 511) + scx) & 2047;
+  const py = (((o[1] + dy) & 255) + scy) & 2047;       // Y envuelve a 8 bits
+  if (attr[(py >> 3 & 31)*64 + (px >> 3 & 63)] & 0x10) hit = 1;
+}
+```
+
+### B.6 Casos de prueba
+
+Salvo que se diga otra cosa: sprites 1× opacos, `PRIO=0`, y los no usados en `Y=248`.
+
+| # | Escena | Resultado |
+|---|---|---|
+| 1 | Sprites 0-12 con la misma Y, sin solaparse | Se ven los índices 0-11; el 12 no |
+| 2 | Ídem, con el sprite 0 a `Y=248` | Se ven del 1 al 12 (el 0 no ocupa hueco) |
+| 3 | Ídem, con el sprite 0 en X=400 | Se ven del 1 al 11; el 0 ocupa hueco fuera de pantalla |
+| 4 | Sprite 0 con píxel color 0 sobre sprite 1 opaco | Se ve el sprite 1 |
+| 5 | Sprite 0 opaco `PRIO=1` sobre sprite 1 opaco `PRIO=0`, con fondo opaco | Se ve el **fondo** |
+| 6 | Igual que 5, con fondo color 0 | Se ve el **sprite 0** |
+| 7 | 11 sprites en una línea | `OVERFLOW` = 0 |
+| 8 | 12 sprites en una línea | `OVERFLOW` = 1 en esa línea y en la física siguiente; se dibujan todos |
+| 9 | 12 sprites en y=100, ninguno en y=239; leer en `VBLANK` pasada la línea 480 | `OVERFLOW` = 0 |
+| 10 | Sprite 2× en X=312 | Se ven 8 columnas; no reaparece por la izquierda |
+| 11 | Sprite en X=511 | No se ve (no equivale a X=-1) |
+
+**Programa de prueba:** [src/asm/demo_spr12.asm](../src/asm/demo_spr12.asm) (carga y
+ejecución en `$0800`), verificado en la placa. Arriba deben verse `1`-`9`, `A`, `B`, `C`
+a 2× y **no** la `D`; abajo, 12 sprites en movimiento sin cortes.
 
 ---
 

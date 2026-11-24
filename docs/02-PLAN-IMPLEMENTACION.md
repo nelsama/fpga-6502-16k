@@ -283,6 +283,7 @@ actual es la ROM de prueba; el monitor original está respaldado en
 | OAM (32 sprites × 4 B en esta fase; hoy × 5 B en RAM16) | ✅ |
 | Line buffer (12 sprites por línea) | ✅ |
 | Transparencia (color 0) | ✅ |
+| Transparencia entre sprites (gana el opaco de menor índice) | ✅ |
 | Multicolor (4 colores por sprite, 2bpp) | ✅ |
 | Paleta de sprites independiente del fondo | ✅ |
 | CPU define patrones de sprite (2 planos) | ✅ |
@@ -320,7 +321,7 @@ el resto en RAM16 (originalmente todo en registros). Dos fases:
 
 1. **Blank** (`h_cnt` 0..31): barrer los 32 sprites del OAM, guardar los que cruzan
    la línea actual (X, tile, paleta, prio, fila).
-2. **Visible**: recorrer el buffer y elegir el primer sprite (menor índice) que cubre
+2. **Visible**: recorrer el buffer y elegir el primer sprite (menor índice, **opaco**) que cubre
    el píxel actual.
 
 **Lección crítica (bug resuelto):** las entradas del buffer NO usadas conservaban datos
@@ -662,7 +663,7 @@ y sustituirlas por las reales de §3.1.
 | **10** | **Colisión sprite↔tile sólido (centro)** | **5.163 (real)** | **26/26** | **Bajo** ✅ |
 | — | Colisión sprite↔sprite (contra 1-2 objetivos) | +900–1.900 LUT | 26/26 | Medio |
 | — | OAM 32→64 sprites | +600–900 LUT | 26/26 | Medio |
-| — | Line buffer 8→16 | +500–600 LUT | 26/26 | Medio |
+| **✔** | **Line buffer 8→12** (hecho) | **+77 Logic, +73 FF, +76 CLS (real)** | 26/26 | Bajo ✅ |
 | — | Punto de colisión configurable (OAM 5 bytes) | +50-100 LUT | 26/26 | Bajo |
 | A | **Análisis del modo bitmap (al final)** | **ver `05-ANALISIS-BITMAP.md`** | **repartir BSRAM** | **Alto** |
 

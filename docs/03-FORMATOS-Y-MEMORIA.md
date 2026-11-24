@@ -183,7 +183,8 @@ Dirección de un campo en el OAM (escritura indirecta): **`sprite * 5 + offset`*
 | Objeto a 2× | 16×16 = 4 sprites con `SCALE2X`, separados **+16** px |
 | Patrones | 64 disponibles (banco `spr_arr`, 512×16 = 1 bloque BSRAM) |
 | Sprites en pantalla | 32 en OAM; **12 por línea** (line buffer) |
-| Prioridad | Menor índice de OAM gana entre sprites con el mismo PRIO |
+| Prioridad | Gana el sprite **opaco** de menor índice; después se aplica **su** `PRIO` frente al fondo |
+| Transparencia entre sprites | **Sí**: donde el de delante es color 0 se ve el de detrás |
 
 ### 3.2 Registro STATUS ($D803, lectura)
 
@@ -374,7 +375,7 @@ no hay banda superior y todo arranca en la banda media (equivale a 2 bandas).
 | `00` | - | tilemap |
 | `01` | - | atributos |
 | `10` | 0 / 1 | patrón de fondo (plano 0 / plano 1) |
-| `11` + bit3=0 | - | OAM (byte 0..127) |
+| `11` + bit3=0 | - | OAM (byte 0..159) |
 | `11` + bit3=1 | 0 / 1 | patrón de sprite (plano 0 / plano 1) |
 
 > **Nota histórica:** el plan original proponía un mapeo lineal `$4000-$7FFF`. Se

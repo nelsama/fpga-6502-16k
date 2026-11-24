@@ -582,6 +582,7 @@ src/
     ├── demo_collision.asm    # Demo de colisión y rebote
     ├── demo_scale2x.asm      # Demo de escalado 2x
     ├── demo_x9.asm           # Demo de X de 9 bits (extremo a extremo)
+    ├── demo_spr12.asm        # Prueba de 12 sprites en la misma línea
     ├── demo_raster.asm       # Demo de split de raster (HUD)
     └── mk_font_c64.py        # Generador de fuente desde el charset del C64
 docs/                         # Documentación (ver docs/README.md)
