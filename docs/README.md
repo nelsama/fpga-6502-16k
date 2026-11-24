@@ -25,11 +25,11 @@ eliminar ningún módulo existente.
 
 | Recurso | Uso final | Libre | ¿Alcanza? |
 |---------|-----------|-------|-----------|
-| Lógica | 4.785 (56%) | 3.855 | ✅ |
-| FF | 2.460 (37%) | 4.233 | ✅ |
-| CLS | 3.285 (77%) | 1.035 | ✅ |
-| BSRAM | 26/26 | 0 | ⚠️ **agotada** |
-| PLL | 1 | 1 | ✅ |
+| Lógica | 4.822 (56%) | 3.818 | ✅ |
+| FF | 2.600 (39%) | 4.171 | ✅ |
+| CLS | 3.300 (77%) | 1.020 | ✅ |
+| BSRAM | 19/26 | 7 | ✅ |
+| PLL | 2/2 | 0 | ⚠️ agotados |
 | DSP | 2/10 | 8 | ✅ |
 
 **Estado: COMPLETO** ✅ — Fases 1–12 implementadas y validadas en hardware.
@@ -60,8 +60,8 @@ audio (76–77). Debe validarse.
 (`$D800`), juegos cargados de SD a RAM, fuente de caracteres en BSRAM.
 Ver `02-PLAN-IMPLEMENTACION.md` §6.
 
-> **Nota:** el recurso crítico es la **BSRAM**. Tras la Fase 7 queda **0 bloques
-> libres** (26/26). El modo bitmap exigiría **reutilizar** la memoria de tiles,
+> **Nota:** con la RAM del CPU en PSRAM quedan **7 bloques BSRAM libres** (19/26);
+> los PLL están agotados (2/2). El modo bitmap exigiría **reutilizar** la memoria de tiles,
 > no añadirla (ver `05-ANALISIS-BITMAP.md`).
 
 ## Artefactos de referencia

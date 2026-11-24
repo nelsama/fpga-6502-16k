@@ -161,7 +161,7 @@ entre sprites) requiere **guardar copias en registros** durante el blank.
 ### 2.3 La RAM del CPU NO se borra con el reset
 
 El reset (`rst_n`, botón S1) reinicia **CPU y vídeo**, pero **no toca la RAM**
-(`$0000-$3FFF`). Consecuencias:
+(`$0000-$7FFF`). Consecuencias:
 - Los programas deben **inicializar su RAM** al arrancar si asumen ceros.
 - Flags persistentes en RAM **sobreviven** al reset (ver §1.10).
 
@@ -227,14 +227,14 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
 
 | Recurso | Uso | Total | Libre |
 |---|---|---|---|
-| CLS | 3285 (77%) | 4320 | 1035 |
-| Register (FF) | 2460 (37%) | 6693 | 4233 |
-| Logic (LUT + ALU + RAM16) | 4785 (56%) | 8640 | 3855 |
-| **BSRAM** | **26 (100%)** | 26 | **0** ⚠️ agotada |
+| CLS | 3300 (77%) | 4320 | 1020 |
+| Register (FF) | 2600 (39%) | 6771 | 4171 |
+| Logic (LUT + ALU + RAM16) | 4822 (56%) | 8640 | 3818 |
+| **BSRAM** | **19 (73%)** | 26 | **7** |
 | DSP | 2 | 10 | 8 |
-| PLL | 1 | 2 | 1 |
+| PLL | 2 | 2 | 0 |
 
-**El recurso agotado es la BSRAM (100%).**
+**Quedan 7 BSRAM libres** desde que la RAM del CPU pasó a la PSRAM. Los PLL están agotados.
 
 ### 3.2 Dónde hay margen (si algún día hace falta)
 
@@ -247,15 +247,21 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
   de menos sprites por línea.
 - **Periféricos** (i2c/uart/spi) — solo si NO los usas (tú sí los usas).
 
-### 3.3 PSRAM: no sirve para VRAM ni ROM, pero es viable como RAM del CPU
+### 3.3 PSRAM: RAM del CPU (implementada)
 
-La Tang Nano 9K tiene **8 MB de PSRAM embebida** (pines dedicados).
+`$0800-$7FFF` está en la PSRAM interna (un chip de los dos; el otro está libre).
 
-- **No sirve como VRAM** en tiempo real (unos 14 ciclos de 81 MHz por lectura suelta) ni
-  **como ROM** (arranca con basura).
-- **RAM del CPU ($0000-$7FFF):** viable sobre el papel, sin wait-states. Lectura 14 ciclos
-  y escritura 9 a 81 MHz con latencia fija; un ciclo de CPU son 24. Liberaría 8 BSRAM.
-  Sin implementar.
+- **Sin wait-states:** lectura 14 ciclos y escritura 9 a 81 MHz con latencia fija; un
+  ciclo de CPU son 24. El dato llega como tarde a 222 ns de los 296 del ciclo.
+- `src/psram/psram_burst.vhd`: controlador (Apache 2.0, probado en la placa en el proyecto
+  PC Engine). `src/psram/psram_ram.vhd`: puente con el CPU y puesta a cero (2,4 ms).
+- **El dato de lectura no pasa por `data_bus_mux`** (llega tarde para su registro) y el de
+  escritura sale directo del CPU (`A6502.dout`).
+- Exige el SDC (`mem`, `mem_p` a 90 grados). Margen del reloj de 81 MHz: 86-97 MHz según la
+  colocación.
+- No sirve como VRAM en tiempo real ni como ROM (arranca con basura).
+- Prueba: `src/asm/test_psram.asm`. Placa (2026-11-24): 145 pasadas, 0 errores.
+- **PLL:** el de 81 MHz pedía 648 MHz (fuera de rango, aviso PA1019) hasta esta versión.
 
 ---
 
@@ -287,13 +293,16 @@ Son **normales** (clocks generados por lógica, no por PLL). No impiden la compi
 Es el error de **recursos agotados** (salía con CLS al 98 %). No es un bug de sintaxis: el
 diseño **no cabe** en el chip. Hay que **liberar CLS** o reducir la función.
 
-### 4.4b Compila bien pero no arranca (pantalla azul, no lee la SD): `Place_Option`
+### 4.4b Compila bien pero no arranca (pantalla azul, no lee la SD)
 
-El arranque puede depender de la **colocación**. Con el mismo fuente, la versión con
-transparencia no arranca con `Place_Option = 0` y sí con `1`, que es el valor del proyecto
-(`impl/6502_board_v3_process_config.json`). Si tras un cambio la placa no arranca, prueba
-otro valor antes de buscar el fallo en la lógica. Causa sin confirmar; el sospechoso es
-el IP SPI de Gowin (3 latches que el análisis de tiempos no cubre).
+Le pasaba a algunas colocaciones (`Place_Option`) con el IP SPI de Gowin, que tenía 3
+latches fuera del análisis de tiempos. Se sustituyó por `src/spi_master.vhd`, sin latches
+(0 diferencias frente al IP en 2,85 millones de ciclos simulados); desde entonces arrancan
+las 3 compilaciones probadas con distinta colocación y SDC. No introduzcas latches: el
+informe debe decir `Register as Latch 0`.
+
+- El proyecto usa `Place_Option = 1`. Si el IDE estaba abierto, reabre el proyecto antes de
+  compilar: repone la opción que tenía en memoria.
 
 ### 4.5 Herramientas de ensamblado (referencia rápida)
 
@@ -310,6 +319,6 @@ el IP SPI de Gowin (3 latches que el análisis de tiempos no cubre).
 
 - **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabía con CLS al 98 %; por reevaluar (hoy 77 %).
 - **Audio por HDMI:** factible en teoría (data islands + InfoFrames), pero no cabe
-  (pide 1 BSRAM y no queda ninguna). Hoy el audio sale por el DAC PWM (GPIO).
+  (pide 1 BSRAM; hoy quedan 7, por reevaluar). Hoy el audio sale por el DAC PWM (GPIO).
 - **Compatibilidad con TV (no monitor):** el core es DVI puro (TMDS sin InfoFrames);
   solo va en monitores. Añadir HDMI real (AVI InfoFrame + audio) está por reevaluar: antes no cabía sin liberar.

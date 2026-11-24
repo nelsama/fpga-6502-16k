@@ -9,7 +9,8 @@
 > **caja negra** (registros y memoria). No necesitas conocer cómo está hecho por
 > dentro. Los ejemplos están en ensamblador (ca65 / cc65).
 
-**Versión del manual:** 3.0 (2026-11-23). Novedades: 12 sprites por línea, transparencia
+**Versión del manual:** 3.1 (2026-11-24). **32 KB de RAM** (`$0000-$7FFF`).
+En 3.0: 12 sprites por línea, transparencia
 entre sprites y comportamiento exacto de `OVERFLOW`; resumen en el Apéndice B.1.
 
 **Hardware de referencia:** `6502_board_v3` (módulo de vídeo cerrado: tiles + sprites
@@ -1920,6 +1921,8 @@ del resto del manual pareciera contradecir este apéndice, manda el apéndice.
 | Solape de sprites | Ganaba el de menor índice aunque su píxel fuese transparente | Gana el **opaco** de menor índice | Seguir buscando si el píxel es color 0 |
 | `OVERFLOW` (`$D803` bit 6) | Se activaba a los 8 | Se activa a los **12** | Umbral; momento exacto en §B.5 |
 | Pulsadores `$C005` | No existían | bit0 = BTN_A, bit1 = BTN_B, **0 = pulsado** | Ver §2.6 |
+| RAM | `$0000-$3FFF` (16 KB); `$4000-$7FFF` sin usar | **`$0000-$7FFF` (32 KB)** lectura/escritura | Ampliar la RAM; ver §B.7 |
+| SPI `$C040-$C047` | IP de Gowin | Módulo propio, **mismo comportamiento** | Nada; detalle en §B.8 |
 
 **No cambian:** direcciones y formato de registros, OAM, patrones, tilemap, atributos,
 paletas, scroll, bandas, `SOLID_HIT`, `SETUP`, fuente y tiempos de vídeo.
@@ -2094,6 +2097,40 @@ Salvo que se diga otra cosa: sprites 1× opacos, `PRIO=0`, y los no usados en `Y
 **Programa de prueba:** [src/asm/demo_spr12.asm](../src/asm/demo_spr12.asm) (carga y
 ejecución en `$0800`), verificado en la placa. Arriba deben verse `1`-`9`, `A`, `B`, `C`
 a 2× y **no** la `D`; abajo, 12 sprites en movimiento sin cortes.
+
+### B.7 RAM
+
+| Dirección | Tamaño | Contenido |
+|---|---|---|
+| `$0000-$07FF` | 2 KB | RAM (página cero, pila y memoria libre) |
+| `$0800-$7FFF` | 30 KB | RAM |
+
+- Para el programa es **un solo bloque de 32 KB**: los mismos ciclos por instrucción en
+  toda la zona, sin wait-states ni diferencias por dirección. Se puede ejecutar código en
+  cualquier parte.
+- Al configurar la FPGA (o encender) vale **0**. El botón de reset **no la borra**.
+
+### B.8 SPI (`$C040-$C047`)
+
+Comprobado contra el modelo del IP de Gowin, sin diferencias.
+
+| Dirección | Lectura | Escritura |
+|---|---|---|
+| `$C040` | RX; leerlo borra `RRDY` | — |
+| `$C041` | último TX | TX: encola un byte y arranca |
+| `$C042` | STATUS | se ignora |
+| `$C043` | 4 bits guardados (bits 7:4 = 0) | guarda bits 3:0, **sin efecto** |
+| `$C044` | máscara de CS (4 bits) | máscara de CS |
+| `$C045` | bit0 = CS activo | bit0 = activa los CS de la máscara |
+| `$C046-$C047` | 0 | se ignora |
+
+STATUS: `E`(7) = `ROE` o `TOE` | `RRDY`(6) | `TRDY`(5) | `TMT`(4) | `TOE`(3) | `ROE`(2).
+
+- Modo 0, MSB primero, SCK = 3,375 MHz: un byte son 8 ciclos de CPU de SCK; de la
+  escritura de TX a `RRDY` pasan unos 11 ciclos de CPU.
+- Cola de 1 byte: escribir TX con `TRDY = 0` reemplaza el byte en espera y pone `TOE`.
+- Si llega un byte con `RRDY = 1`, se sobrescribe RX y se pone `ROE`.
+- `ROE` y `TOE` **no se borran hasta el reset**. El SPI **nunca genera IRQ**.
 
 ---
 

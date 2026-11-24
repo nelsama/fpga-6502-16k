@@ -316,8 +316,8 @@ Comparación: NES = 25, C64 = 16, Master System = 32.
 
 | Rango | Tamaño | Contenido | Estado |
 |-------|--------|-----------|--------|
-| `$0000–$3FFF` | 16 KB | RAM (BSRAM) | Existente |
-| **`$4000–$7FFF`** | **16 KB** | **VRAM** | **NUEVO** |
+| `$0000–$07FF` | 2 KB | RAM (BSRAM): página cero y pila | Existente |
+| `$0800–$7FFF` | 30 KB | RAM (PSRAM, sin wait-states) | Existente |
 | `$8000–$BFFF` | 16 KB | ROM (programa) | Existente |
 | `$C000–$C003` | 4 B | GPIO | Existente |
 | **`$C004`** | **1 B** | **Flag de usuario (bit 0)** | **NUEVO** |

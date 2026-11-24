@@ -40,8 +40,8 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 
 | Rango | Tamaño | Descripción |
 |-------|--------|-------------|
-| `$0000 - $3FFF` | 16 KB | **RAM** (Zero Page, Stack, memoria de trabajo) |
-| `$4000 - $7FFF` | 16 KB | *No usado* |
+| `$0000 - $07FF` | 2 KB | **RAM** en BSRAM (Zero Page, Stack) |
+| `$0800 - $7FFF` | 30 KB | **RAM** en PSRAM interna (sin wait-states) |
 | `$8000 - $BFFF` | 16 KB | **ROM** (Código del programa) |
 | `$C000` | 1 byte | **Puerto 1** - Datos (bidireccional) |
 | `$C001` | 1 byte | **Puerto 2** - Datos (bidireccional) |
@@ -336,10 +336,10 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 - **Características**: Soporte completo de IRQ, NMI, pipeline opcional
 
 ### Memoria
-- **RAM**: 16 KB usando Block RAM de Gowin (8 bloques BSRAM)
-- **ROM**: 16 KB con programa hardcoded (12 bloques BSRAM, generada con Python)
+- **RAM**: 32 KB: 2 KB en 1 bloque BSRAM (`src/ram_2k.vhd`) y 30 KB en la PSRAM interna (`src/psram/`, 81 MHz, sin wait-states). Se pone a cero al configurar la FPGA; S1 no la borra
+- **ROM**: 16 KB con programa hardcoded (8 bloques BSRAM, generada con Python)
 - **VRAM de vídeo**: 6 bloques BSRAM (tilemap, atributos, patrones, sprites, fuente)
-- **Uso BSRAM**: 26/26 bloques (100%, agotada)
+- **Uso BSRAM**: 19/26 bloques (7 libres)
 
 ### Puertos GPIO
 - **Puerto 1**: 8 bits (LVCMOS33, BANK2 3.3V), bits 0-7 en pines
@@ -581,6 +581,7 @@ src/
     ├── demo_collision.asm    # Demo de colisión y rebote
     ├── demo_scale2x.asm      # Demo de escalado 2x
     ├── demo_x9.asm           # Demo de X de 9 bits (extremo a extremo)
+    ├── test_psram.asm        # Prueba de la RAM en PSRAM
     ├── demo_spr12.asm        # Prueba de 12 sprites en la misma línea
     ├── demo_raster.asm       # Demo de split de raster (HUD)
     └── mk_font_c64.py        # Generador de fuente desde el charset del C64
