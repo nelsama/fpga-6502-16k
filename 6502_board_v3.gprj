@@ -33,8 +33,8 @@
         <File path="src/uart.vhd" type="file.vhdl" enable="1"/>
         <File path="src/uart_wrapper.vhd" type="file.vhdl" enable="1"/>
         <File path="src/hdmi/tmds_encoder_2.vhd" type="file.vhdl" enable="1"/>
-        <File path="src/hdmi/hdmi_impl.vhd" type="file.vhdl" enable="1"/>
-        <File path="src/hdmi/hdmi_module.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi/hdmi_tx.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/hdmi/hdmi_phy.vhd" type="file.vhdl" enable="1"/>
         <File path="src/hdmi/clk_27x5.vhd" type="file.vhdl" enable="1"/>
         <File path="src/hdmi/font_data.vhd" type="file.vhdl" enable="1"/>
         <File path="src/hdmi/video_core.vhd" type="file.vhdl" enable="1"/>

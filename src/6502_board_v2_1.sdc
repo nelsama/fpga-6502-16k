@@ -12,3 +12,6 @@ create_clock -name mem_p -period 12.346 -waveform {3.086 9.259} [get_nets {clk_8
 # DAC de audio (81 MHz, o 27 MHz si el PLL no engancha)
 create_clock -name dac -period 12.346 -waveform {0 6.173} [get_nets {clk_81mhz_safe}]
 set_clock_groups -asynchronous -group [get_clocks {clk27 sysclk cpuclk clk1m}] -group [get_clocks {mem mem_p}] -group [get_clocks {dac}]
+# HDMI: pixel de 27 MHz derivado del PLL de 135 MHz
+create_clock -name pix -period 37.037 -waveform {0 18.518} [get_nets {clk_pixel}]
+set_clock_groups -asynchronous -group [get_clocks {pix}] -group [get_clocks {clk27 sysclk cpuclk clk1m}]

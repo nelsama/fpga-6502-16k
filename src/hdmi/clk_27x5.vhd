@@ -14,6 +14,7 @@ entity clk_27x5 is
     port (
         clkout: out std_logic;
         clkoutp: out std_logic;
+        lock: out std_logic;
         clkin: in std_logic
     );
 end clk_27x5;
@@ -78,6 +79,7 @@ architecture Behavioral of clk_27x5 is
     end component;
 
 begin
+    lock <= lock_o;
     gw_vcc <= '1';
     gw_gnd <= '0';
 

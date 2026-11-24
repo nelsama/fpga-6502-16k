@@ -82,6 +82,12 @@ architecture arch of Board is
 
     signal audio_out_mono :std_logic;
 
+    -- HDMI: reloj de pixel (27 MHz del PLL) y muestra de audio de 48 kHz
+    signal clk_pixel    : std_logic;
+    signal hdmi_aud_req : std_logic;
+    signal hdmi_aud_s   : std_logic_vector(2 downto 0) := "000";
+    signal hdmi_aud     : std_logic_vector(15 downto 0) := (others => '0');
+
     -- Señales del puente CPU -> VRAM (Fase 4)
     signal vid_we    : std_logic;
     signal vid_area  : std_logic_vector(1 downto 0);
@@ -287,6 +293,19 @@ begin
         audio_data=>sid_audio_data
     );
 
+    -- Audio para HDMI: la muestra se congela en el dominio del SID cuando el
+    -- transmisor la pide, y queda estable hasta la siguiente peticion.
+    hdmi_audio : process(CLOCK_27_i)
+    begin
+        if rising_edge(CLOCK_27_i) then
+            hdmi_aud_s <= hdmi_aud_s(1 downto 0) & hdmi_aud_req;
+            if hdmi_aud_s(2) /= hdmi_aud_s(1) then
+                -- binario con offset -> complemento a 2
+                hdmi_aud <= (not sid_audio_data(17)) & sid_audio_data(16 downto 2);
+            end if;
+        end if;
+    end process;
+
     audio_out_l<=audio_out_mono;
     audio_out_r<=audio_out_mono;
 
@@ -298,7 +317,7 @@ begin
         cpu_addr    => addr_bus,
         cpu_data_in => data_bus,
         cpu_rw      => r_w,
-        clk_vid     => CLOCK_27_i,
+        clk_vid     => clk_pixel,
         vid_we      => vid_we,
         vid_area    => vid_area,
         vid_addr    => vid_addr,
@@ -330,6 +349,9 @@ begin
     video_core_inst : entity work.video_core
     port map (
         clk_27      => CLOCK_27_i,
+        clk_pixel_o => clk_pixel,
+        audio_req   => hdmi_aud_req,
+        audio_in    => hdmi_aud,
         rst_n       => reset,
 
         vid_we      => vid_we,

@@ -43,8 +43,14 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 entity video_core is
+    generic (
+        HDMI_FULL : boolean := true       -- false = DVI (solo imagen)
+    );
     port (
         clk_27      : in  std_logic;
+        clk_pixel_o : out std_logic;      -- 27 MHz de pixel (del PLL de HDMI)
+        audio_req   : out std_logic;      -- cambia en cada muestra (48 kHz)
+        audio_in    : in  std_logic_vector(15 downto 0) := (others => '0');
         rst_n       : in  std_logic;
 
         -- Escritura desde el CPU (ya sincronizada por video_bus: pulso de
@@ -124,19 +130,19 @@ end entity;
 architecture rtl of video_core is
 
     signal clk_pixel  : std_logic;
-    signal clk_serial : std_logic;
+    signal tq0, tq1, tq2 : std_logic_vector(9 downto 0);
 
     -- ========================================================================
     -- TIMING DE BARRIDO - CONGELADO (858 x 525)
     -- ========================================================================
     constant H_VISIBLE  : integer := 720;
     constant H_SYNC_ON  : integer := 736;
-    constant H_SYNC_OFF : integer := 798;
+    constant H_SYNC_OFF : integer := 797;   -- 62 pixeles
     constant H_TOTAL    : integer := 858;
 
     constant V_VISIBLE  : integer := 480;
     constant V_SYNC_ON  : integer := 489;
-    constant V_SYNC_OFF : integer := 495;
+    constant V_SYNC_OFF : integer := 494;   -- 6 lineas
     constant V_TOTAL    : integer := 525;
 
     -- BG_COLOR (Fase 14): color del margen y del fondo "vacio".
@@ -456,45 +462,9 @@ architecture rtl of video_core is
     -- ========================================================================
     -- COMPONENTES
     -- ========================================================================
-    component hdmi_module
-        port (
-            vga_clk_x5      : in  std_logic;
-            vga_clk         : in  std_logic;
-            vga_red_in      : in  std_logic_vector(7 downto 0);
-            vga_green_in    : in  std_logic_vector(7 downto 0);
-            vga_blue_in     : in  std_logic_vector(7 downto 0);
-            vga_hsync_in    : in  std_logic;
-            vga_vsync_in    : in  std_logic;
-            vga_disp_ena_in : in  std_logic;
-            tmds_c0_p_out   : out std_logic;
-            tmds_c0_n_out   : out std_logic;
-            tmds_c1_p_out   : out std_logic;
-            tmds_c1_n_out   : out std_logic;
-            tmds_c2_p_out   : out std_logic;
-            tmds_c2_n_out   : out std_logic;
-            tmds_ck_p_out   : out std_logic;
-            tmds_ck_n_out   : out std_logic
-        );
-    end component;
-
-    component clk_27x5
-        port (
-            clkout  : out std_logic;
-            clkoutp : out std_logic;
-            clkin   : in  std_logic
-        );
-    end component;
-
 begin
 
-    clk_pixel <= clk_27;
-
-    pll_x5 : clk_27x5
-        port map (
-            clkout  => clk_serial,
-            clkoutp => open,
-            clkin   => clk_27
-        );
+    clk_pixel_o <= clk_pixel;
 
     -- ========================================================================
     -- CONTADORES DE TIMING
@@ -521,7 +491,9 @@ begin
     end process;
 
     hs     <= '0' when (h_cnt >= H_SYNC_ON) and (h_cnt <= H_SYNC_OFF) else '1';
-    vs     <= '0' when (v_cnt >= V_SYNC_ON) and (v_cnt <= V_SYNC_OFF) else '1';
+    -- el sincronismo vertical cambia donde empieza el horizontal (CEA-861)
+    vs     <= '0' when (v_cnt > V_SYNC_ON or (v_cnt = V_SYNC_ON and h_cnt >= H_SYNC_ON)) and
+                       (v_cnt <= V_SYNC_OFF or (v_cnt = V_SYNC_OFF + 1 and h_cnt < H_SYNC_ON)) else '1';
     de     <= '1' when (h_cnt < H_VISIBLE) and (v_cnt < V_VISIBLE) else '0';
     margen <= '1' when (h_cnt < 40) or (h_cnt >= 680) else '0';
 
@@ -1524,24 +1496,32 @@ begin
     -- ========================================================================
     -- TRANSMISOR TMDS
     -- ========================================================================
-    hdmi_inst : hdmi_module
+    hdmi_tx_inst : entity work.hdmi_tx
+        generic map (FULL => HDMI_FULL)
         port map (
-            vga_clk_x5      => clk_serial,
-            vga_clk         => clk_pixel,
-            vga_red_in      => rgb24(23 downto 16),
-            vga_green_in    => rgb24(15 downto 8),
-            vga_blue_in     => rgb24(7 downto 0),
-            vga_hsync_in    => hs2,
-            vga_vsync_in    => vs2,
-            vga_disp_ena_in => de2,
-            tmds_c0_p_out   => tmds_c0_p,
-            tmds_c0_n_out   => tmds_c0_n,
-            tmds_c1_p_out   => tmds_c1_p,
-            tmds_c1_n_out   => tmds_c1_n,
-            tmds_c2_p_out   => tmds_c2_p,
-            tmds_c2_n_out   => tmds_c2_n,
-            tmds_ck_p_out   => tmds_ck_p,
-            tmds_ck_n_out   => tmds_ck_n
+            clk       => clk_pixel,
+            h_cnt     => h_cnt,
+            v_cnt     => v_cnt,
+            hs        => hs2,
+            vs        => vs2,
+            de        => de2,
+            rgb       => rgb24,
+            audio_req => audio_req,
+            audio     => audio_in,
+            q0        => tq0,
+            q1        => tq1,
+            q2        => tq2
+        );
+
+    hdmi_phy_inst : entity work.hdmi_phy
+        port map (
+            clk_27    => clk_27,
+            clk_pixel => clk_pixel,
+            q0 => tq0, q1 => tq1, q2 => tq2,
+            tmds_c0_p => tmds_c0_p, tmds_c0_n => tmds_c0_n,
+            tmds_c1_p => tmds_c1_p, tmds_c1_n => tmds_c1_n,
+            tmds_c2_p => tmds_c2_p, tmds_c2_n => tmds_c2_n,
+            tmds_ck_p => tmds_ck_p, tmds_ck_n => tmds_ck_n
         );
 
 end architecture;
