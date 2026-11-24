@@ -89,9 +89,9 @@ en RAM y compáralas tú. El hardware solo da:
 - flag **global** de colisión sprite↔tile sólido (`SOLID_HIT`, bit 5 de `$D803`),
 - flag **por sprite** de colisión con tile sólido (campo COLL del OAM).
 
-### 1.7 No superes 8 sprites por línea
+### 1.7 No superes 12 sprites por línea
 
-Es un **límite duro del chip**. Con más de 8 sprites cruzando la misma línea
+Es un **límite duro del chip**. Con más de 12 sprites cruzando la misma línea
 horizontal, se activa `OVERFLOW` (bit 6 de `$D803`) y **algunos no se dibujan**
 (parpadeo/pérdida). Si tu juego tiene muchos objetos en una fila, usa **tiles**.
 
@@ -182,7 +182,7 @@ CLS no cabía; fue posible tras mover el OAM y el line buffer a RAM16.
 
 ### 2.6 Usa RAM16 para los arrays; CLS no es 1:1 con los FF
 
-El chip tiene **4320 CLS** (hoy al **75 %**). Lecciones:
+El chip tiene **4320 CLS** (hoy al **77 %**). Lecciones:
 
 - Un array leído con varias direcciones a la vez puede acabar duplicado en FF y RAM16
   (le pasaba al OAM: ~1800 FF de más). Sepáralo en **un banco por campo**, con una
@@ -227,9 +227,9 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
 
 | Recurso | Uso | Total | Libre |
 |---|---|---|---|
-| CLS | 3237 (75%) | 4320 | 1083 |
-| Register (FF) | 2387 (36%) | 6693 | 4306 |
-| Logic (LUT + ALU + RAM16) | 4708 (55%) | 8640 | 3932 |
+| CLS | 3285 (77%) | 4320 | 1035 |
+| Register (FF) | 2460 (37%) | 6693 | 4233 |
+| Logic (LUT + ALU + RAM16) | 4785 (56%) | 8640 | 3855 |
 | **BSRAM** | **26 (100%)** | 26 | **0** ⚠️ agotada |
 | DSP | 2 | 10 | 8 |
 | PLL | 1 | 2 | 1 |
@@ -243,7 +243,7 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
   de filtro** (barridos, resonancia). No rompe las 3 voces.
 - **Timer** — si solo usas `delay_us/ms` y `get_micros` (versión *minimal* de la
   librería), puedes recortar TICK (32 bits), el timer programable y la IRQ.
-- **NSL** (`video_core.vhd`) — bajar de 8 a 6-7 libera CLS del line buffer, a costa
+- **NSL** (`video_core.vhd`) — bajar de 12 a 8-10 libera CLS del line buffer, a costa
   de menos sprites por línea.
 - **Periféricos** (i2c/uart/spi) — solo si NO los usas (tú sí los usas).
 
@@ -308,7 +308,7 @@ el IP SPI de Gowin (3 latches que el análisis de tiempos no cubre).
 
 ## Apéndice — Pendientes / ideas aparcadas
 
-- **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabía con CLS al 98 %; por reevaluar (hoy 75 %).
+- **Coprocesador de punto fijo Q16.16** (~1 DSP + ~250-450 LUT): no cabía con CLS al 98 %; por reevaluar (hoy 77 %).
 - **Audio por HDMI:** factible en teoría (data islands + InfoFrames), pero no cabe
   (pide 1 BSRAM y no queda ninguna). Hoy el audio sale por el DAC PWM (GPIO).
 - **Compatibilidad con TV (no monitor):** el core es DVI puro (TMDS sin InfoFrames);

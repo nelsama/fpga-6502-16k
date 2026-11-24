@@ -182,7 +182,7 @@ Dirección de un campo en el OAM (escritura indirecta): **`sprite * 5 + offset`*
 | Objeto grande | 16×16 = **4 sprites de 8×8** en rejilla 2×2 |
 | Objeto a 2× | 16×16 = 4 sprites con `SCALE2X`, separados **+16** px |
 | Patrones | 64 disponibles (banco `spr_arr`, 512×16 = 1 bloque BSRAM) |
-| Sprites en pantalla | 32 en OAM; **8 por línea** (line buffer) |
+| Sprites en pantalla | 32 en OAM; **12 por línea** (line buffer) |
 | Prioridad | Menor índice de OAM gana entre sprites con el mismo PRIO |
 
 ### 3.2 Registro STATUS ($D803, lectura)
@@ -190,7 +190,7 @@ Dirección de un campo en el OAM (escritura indirecta): **`sprite * 5 + offset`*
 | Bit | Campo | Descripción |
 |-----|-------|-------------|
 | 7 | `VBLANK` | 1 = en vblank (seguro escribir VRAM) |
-| 6 | `SPRITE_OVERFLOW` | 1 = más de 8 sprites en una línea |
+| 6 | `SPRITE_OVERFLOW` | 1 = la línea llegó a 12 sprites (line buffer lleno) |
 | **5** | **`SOLID_HIT`** | 1 = algún sprite tocó un tile sólido (colisión, Fase 10/11) |
 | **4** | **`VIDEO_READY`** | **1 = inicialización de la VRAM terminada** |
 | 3:0 | — | reservado |
@@ -388,7 +388,7 @@ no hay banda superior y todo arranca en la banda media (equivale a 2 bandas).
 | Bits | Campo | Descripción |
 |------|-------|-------------|
 | 7 | `VBLANK` | 1 = en vblank (seguro escribir VRAM) |
-| 6 | `SPRITE_OVERFLOW` | Más de 8 sprites en una línea (se recalcula por línea) |
+| 6 | `SPRITE_OVERFLOW` | La línea llegó a 12 sprites (se recalcula por línea) |
 | 5 | **`SOLID_HIT`** | 1 = algún sprite tocó un tile sólido (colisión sprite↔tile, Fase 10) |
 | **4** | **`VIDEO_READY`** | 1 = inicialización de la VRAM terminada |
 | 3:0 | — | reservado |

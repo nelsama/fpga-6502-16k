@@ -343,13 +343,13 @@ architecture rtl of video_core is
     signal oam_spr   : unsigned(4 downto 0);   -- vid_addr / 5
     signal oam_fld   : unsigned(2 downto 0);   -- vid_addr mod 5
     -- ========================================================================
-    -- LINE BUFFER DE SPRITES (hasta 8 sprites por linea)
+    -- LINE BUFFER DE SPRITES (hasta 12 sprites por linea)
     --   Durante el blank se recolectan los sprites que cruzan la linea; luego,
     --   en el barrido visible, se comparan todos contra el pixel actual.
     --   Cada entrada: X, tile, paleta, fila. X y escala en registros; el resto en RAM16.
-    --   NSL=8: limite de 8 sprites por linea (comportamiento definido).
+    --   NSL=12: limite de 12 sprites por linea (comportamiento definido).
     -- ========================================================================
-    constant NSL : integer := 8;   -- sprites maximos por linea
+    constant NSL : integer := 12;   -- sprites maximos por linea
 
     type lb_x_t   is array (0 to NSL-1) of unsigned(8 downto 0);
     type lb_pay_t is array (0 to 15) of std_logic_vector(16 downto 0);
@@ -371,7 +371,7 @@ architecture rtl of video_core is
     type lb_op_t is array (0 to NSL-1) of std_logic_vector(7 downto 0);
     signal lb_op   : lb_op_t := (others => (others => '0'));
     signal op_we   : std_logic := '0';
-    signal op_slot : unsigned(2 downto 0) := (others => '0');
+    signal op_slot : unsigned(3 downto 0) := (others => '0');
     signal op_fx   : std_logic := '0';
     signal lb_n    : unsigned(3 downto 0) := (others => '0');  -- cuantos hay
 
@@ -1265,7 +1265,7 @@ begin
     -- ========================================================================
     -- EVALUADOR DE SPRITES CON LINE BUFFER
     --   Fase 1 (blank): recorrer el OAM, guardar en el line buffer los sprites
-    --   que cruzan la linea actual (hasta 8).
+    --   que cruzan la linea actual (hasta 12).
     --   Fase 2 (visible): recorrer el line buffer combinacionalmente y elegir
     --   el primer sprite (menor indice) que cubre el pixel actual.
     --
@@ -1323,8 +1323,8 @@ begin
     begin
         if rising_edge(clk_pixel) then
             if lb_we = '1' then
-                lb_x(to_integer(lb_n(2 downto 0)))     <= ev_sx;
-                lb_scale(to_integer(lb_n(2 downto 0))) <= ev_scale;
+                lb_x(to_integer(lb_n)) <= ev_sx;
+                lb_scale(to_integer(lb_n)) <= ev_scale;
                 lb_pay(to_integer(lb_n))               <= lb_din;
             end if;
         end if;
@@ -1337,7 +1337,7 @@ begin
     begin
         if rising_edge(clk_pixel) then
             op_we   <= lb_we;
-            op_slot <= lb_n(2 downto 0);
+            op_slot <= lb_n;
             op_fx   <= lb_din(9);
             o := spr_pat_data(15 downto 8) or spr_pat_data(7 downto 0);
             if op_we = '1' then

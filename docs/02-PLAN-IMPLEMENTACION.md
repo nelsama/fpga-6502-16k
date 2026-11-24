@@ -281,7 +281,7 @@ actual es la ROM de prueba; el monitor original está respaldado en
 | Tarea | Estado |
 |-------|--------|
 | OAM (32 sprites × 4 B en esta fase; hoy × 5 B en RAM16) | ✅ |
-| Line buffer (8 sprites por línea) | ✅ |
+| Line buffer (12 sprites por línea) | ✅ |
 | Transparencia (color 0) | ✅ |
 | Multicolor (4 colores por sprite, 2bpp) | ✅ |
 | Paleta de sprites independiente del fondo | ✅ |
@@ -315,7 +315,7 @@ En esta fase estaba en registros y cada sprite ocupaba 4 bytes; hoy ocupa 5 (`CO
  FLIP_Y  FLIP_X  PRIO    -       PALETA
 ```
 
-**Line buffer** — 8 sprites por línea (`NSL = 8`): X y escala en registros,
+**Line buffer** — 12 sprites por línea (`NSL = 12`): X y escala en registros,
 el resto en RAM16 (originalmente todo en registros). Dos fases:
 
 1. **Blank** (`h_cnt` 0..31): barrer los 32 sprites del OAM, guardar los que cruzan
@@ -361,7 +361,7 @@ se ve un sprite de detrás o el `BG_COLOR`.
 | Bit | Campo | Descripción |
 |-----|-------|-------------|
 | 7 | `VBLANK` | 1 = en vblank (seguro escribir VRAM) |
-| 6 | `SPRITE_OVERFLOW` | 1 = hubo más de 8 sprites en una línea |
+| 6 | `SPRITE_OVERFLOW` | 1 = la línea llegó a 12 sprites (line buffer lleno) |
 | 5..0 | reservado | |
 
 - **VBLANK**: directo de `v_cnt`.

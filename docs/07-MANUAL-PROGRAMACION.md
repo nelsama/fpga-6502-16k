@@ -863,7 +863,7 @@ valen 0 (`pixcode 00`), ese píxel **no existe**: se ve lo que haya detrás (fon
 `BG_COLOR`). No depende del fondo ni de otros sprites.
 
 **2. Solo se dibuja UN sprite por píxel: el OPACO de menor índice.** El line buffer
-guarda los primeros 8 sprites de la línea en orden de índice; en cada píxel gana el
+guarda los primeros 12 sprites de la línea en orden de índice; en cada píxel gana el
 de índice más bajo **cuyo píxel no sea color 0**.
 
 | Píxel del sprite de índice bajo | Píxel del de índice alto | Se ve |
@@ -882,7 +882,7 @@ registros ni bits nuevos.
   mayor, aunque a él lo tape el fondo.
 - **Cambiar un patrón de sprite a mitad de pantalla:** la opacidad se lee al principio
   de cada línea física; la línea en curso puede usar la anterior.
-- No cambia el límite de 8 por línea: un sprite totalmente transparente también cuenta.
+- No cambia el límite de 12 por línea: un sprite totalmente transparente también cuenta.
 
 **Consejos de diseño:**
 
@@ -890,9 +890,9 @@ registros ni bits nuevos.
 - El orden visual se controla con el **índice del sprite** (menor = delante) y con
   **`PRIO`** (bit 5 de FLAGS) frente al fondo.
 
-> **Presupuesto:** máximo **8 sprites por línea**. Si se superan, se pierden y se
+> **Presupuesto:** máximo **12 sprites por línea**. Si se superan, se pierden y se
 > activa `OVERFLOW` (bit 6 de `$D803`). Dos personajes de 16×16 (2×2 sprites) ocupan
-> **2 sprites por línea cada uno**: sobran 4 para proyectiles y efectos.
+> **2 sprites por línea cada uno**: sobran 8 para proyectiles y efectos.
 
 ### 6.3 Escribir un campo del OAM
 
@@ -1446,19 +1446,19 @@ cajas (AABB) de los objetos, cuyas posiciones ya tienes en RAM:
 | Bit | Nombre | Significado |
 |-----|--------|-------------|
 | 7 | `VBLANK` | 1 = fuera de la zona visible (seguro escribir VRAM/OAM) |
-| 6 | `OVERFLOW` | 1 = hubo más de 8 sprites en alguna línea del último frame. No se limpia al leer |
+| 6 | `OVERFLOW` | 1 = la línea llegó a 12 sprites. Se recalcula **en cada línea**; no se limpia al leer |
 | 5 | `SOLID_HIT` | 1 = algún sprite tocó un tile sólido este frame. No se limpia al leer |
 | 4 | `VIDEO_READY` | 1 = inicialización de VRAM terminada (esperar al arrancar) |
 
-> **`OVERFLOW` (detalle):** el hardware puede dibujar como máximo **8 sprites por
-> línea**. Si en una línea hay más de 8, se dibujan los primeros y **se descartan los
-> demás de esa línea**; el flag se pone a 1. No indica *cuál* se descartó.
+> **`OVERFLOW` (detalle):** el hardware dibuja como máximo **12 sprites por línea**; los
+> siguientes **se descartan en esa línea**. El flag se pone a 1 **al llegar a 12**, aunque
+> no se pierda ninguno, y no indica *cuál* se descartó.
 
-> ⚠️ **Leer `$D803` no limpia `OVERFLOW` ni `SOLID_HIT`.** Ambos reflejan el estado
-> del frame en curso:
+> ⚠️ **Leer `$D803` no limpia `OVERFLOW` ni `SOLID_HIT`:**
 > - **`SOLID_HIT`**: se vuelve a evaluar al comenzar cada VBLANK y **se mantiene
 >   durante todo el frame**, hasta el siguiente VBLANK.
-> - **`OVERFLOW`**: refleja si hubo desbordamiento en el frame.
+> - **`OVERFLOW`**: se recalcula **en cada línea**. Leído en VBLANK no dice si hubo
+>   desbordamiento durante la imagen; hay que leerlo mientras se dibuja.
 >
 > Por tanto, simplemente revisa el bit que te interesa. Como son varios bits en un
 > solo registro, **guarda el byte en RAM una vez por frame** si necesitas consultar
@@ -1722,7 +1722,7 @@ wait_setup:
 | Sprites | 32 en OAM | Más requeriría otro hardware |
 | Coordenada X | **9 bits (0-511)** | bit 8 en FLAGS(2) → cubre toda la pantalla |
 | Coordenada Y | 8 bits (0-255) | pantalla 240 → sobra |
-| Sprites por línea | **8 (máximo del chip)** | Más → `OVERFLOW` y se pierde alguno. **8 es un límite duro de este bitstream** (ver nota abajo) |
+| Sprites por línea | **12** | Al llegar a 12 → `OVERFLOW`; del 13.º en adelante se pierden. **Límite de este bitstream** (ver nota abajo) |
 | Sprites (patrones) | **64** (0..63) | 8×8, 2bpp; el campo TILE es de 6 bits (§6.0). **Todos utilizables**; 0-2 traen arte de demo |
 | Patrones de fondo | 256 | comparte rango con la fuente (`$20`-`$7F`) |
 | Paletas de fondo / sprite | 4 / 4 | cada una de 4 colores; **escribibles** por el CPU (§4.4) |
@@ -1738,10 +1738,9 @@ wait_setup:
 | Setup de VRAM (`$D816`) | limpia + re-expande fuente | ~120-275 µs; durante `BUSY` se ignoran escrituras CPU a VRAM/OAM |
 | Overscan del monitor | variable | las filas 0 y 29 pueden recortarse según el monitor |
 
-> **Sobre los 8 sprites por línea:** es el **límite de este bitstream** (`NSL = 8`
-> en `video_core.vhd`). Antes subir a 9 o 10 no pasaba el placement porque el diseño
-> estaba al 98 % de CLS; tras mover el OAM y el line buffer a RAM16 está al **73 %**.
-> Ampliarlo no se ha probado y cambiaría el comportamiento (`OVERFLOW`).
+> **Sobre los 12 sprites por línea:** es el **límite de este bitstream** (`NSL = 12` en
+> `video_core.vhd`). Antes era 8. Los programas escritos para 8 funcionan igual, salvo que
+> ahora se ven los sprites 9.º a 12.º y `OVERFLOW` se activa a los 12.
 
 > **Sobre los patrones de sprite 0-2:** el arranque del core los **graba con arte de
 > demo** (cara, rombo y X), así que **no** están a cero. No están reservados: **los
@@ -1763,7 +1762,7 @@ wait_setup:
 1. **Actualiza todo en VBLANK** (OAM, scroll, paletas). Nunca a mitad del frame.
 2. **Rellena el mundo** completo (64×32) antes de hacer scroll.
 3. **Espera VIDEO_READY** al arrancar antes de tocar la VRAM.
-4. **No superes 8 sprites por línea** (o usa `OVERFLOW` para detectarlo).
+4. **No superes 12 sprites por línea**.
 5. **Colisión de juego = software**: guarda X/Y de los objetos y compáralas.
 6. **HUD arriba:** reserva la fila 0 del tilemap (margen) y usa las filas 1+.
 7. **No uses las filas 0 ni 29 para información crítica:** dependiendo del monitor

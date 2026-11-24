@@ -453,7 +453,7 @@ Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 
 - **Fondo:** tilemap de **64×32 celdas** (mayor que la pantalla 40×30 → scroll),
   256 patrones de 8×8 en **2bpp** (4 colores c/u).
 - **Sprites:** 32 en OAM (8×8), 64 patrones, con flips X/Y, prioridad, **escala 2×**,
-  **X de 9 bits** (0-511). **Hasta 8 sprites por línea** (límite fijado en el
+  **X de 9 bits** (0-511). **Hasta 12 sprites por línea** (límite fijado en el
   diseño; ver el manual §13).
 - **Scroll** horizontal y vertical sobre el mapa, con envoltura.
 - **Split de raster:** hasta **3 bandas** con scroll independiente (HUD fijo arriba/abajo).
