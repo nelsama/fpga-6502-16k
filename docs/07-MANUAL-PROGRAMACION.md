@@ -2108,6 +2108,8 @@ a 2× y **no** la `D`; abajo, 12 sprites en movimiento sin cortes.
 - Para el programa es **un solo bloque de 32 KB**: los mismos ciclos por instrucción en
   toda la zona, sin wait-states ni diferencias por dirección. Se puede ejecutar código en
   cualquier parte.
+- El monitor v2.8.0 reserva `$3E00-$3FFF` para su pila: los programas disponen de
+  `$0800-$3DFF` y `$4000-$7FFF`. Es una convención del monitor, no del hardware.
 - Al configurar la FPGA (o encender) vale **0**. El botón de reset **no la borra**.
 
 ### B.8 SPI (`$C040-$C047`)
