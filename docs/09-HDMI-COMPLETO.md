@@ -237,7 +237,7 @@ Cada línea, en los 138 píxeles de borrado:
 | ACR (N, CTS) | líneas múltiplo de 32 |
 | AVI InfoFrame | líneas 10 y 490 |
 | Audio InfoFrame | líneas 11 y 491 |
-| Control general (quita el mute) | línea 484 |
+| Control general (quita el mute) | línea 489, justo tras el flanco de VSYNC (solo se admite ahí) |
 
 Los paquetes fijos se calculan al sintetizar, con su BCH. Solo el de audio se calcula al vuelo.
 
@@ -268,7 +268,9 @@ Los paquetes fijos se calculan al sintetizar, con su BCH. Solo el de audio se ca
 ## 12. Estado de las pruebas
 
 - **Monitor:** imagen y audio correctos en la placa (2026-11-24).
-- **Tele Samsung reciente:** pantalla negra. **Sin resolver**; no se sabe si es la señal, el
-  formato o la detección. Queda pendiente probar con `FULL => false` y con otros proyectos.
-- Solo se ha integrado en este proyecto. Las instrucciones para otros salen de esa integración
-  y no se han ejecutado en ninguno.
+- **Teles Samsung y LG recientes:** **«Sin señal»**. **Sin resolver.** Probado sin éxito con más
+  fuerza de salida (`DRIVE=16`). «Sin señal» apunta a la detección (5 V de la patilla 18) o al
+  nivel eléctrico, no al audio ni a los InfoFrames. Hay al menos otro caso publicado de Tang Nano 9K
+  que va en un monitor y no en una Samsung. Pendiente: medir los 5 V, `FULL => false` y un
+  splitter con alimentación propia.
+- Integrado también en los proyectos NES y Master System (monitor).

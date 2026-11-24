@@ -283,7 +283,7 @@ begin
                 elsif v_cnt = 11 or v_cnt = 491 then
                     stat <= "011";
                     npk  <= pend + 1;
-                elsif v_cnt = 484 then           -- en el borrado vertical
+                elsif v_cnt = 489 then           -- justo tras el flanco de VSYNC
                     stat <= "100";
                     npk  <= pend + 1;
                 else
