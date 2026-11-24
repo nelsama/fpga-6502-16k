@@ -206,14 +206,14 @@ Si no se escriben estos registros, el UART mantiene 115200 baudios por defecto.
 ### Registros SPI Master (SD Card)
 
 Interfaz SPI para tarjeta microSD usando pines TF Card del Tang Nano 9K.
-Utiliza el IP SPI Master de Gowin con control de CS manual.
+SPI master propio (`src/spi_master.vhd`) con control de CS manual.
 
 | Dirección | Registro | Tipo | Descripción |
 |-----------|----------|------|-------------|
-| `$C040` | RX_DATA | IP (R) | Dato recibido del SPI |
-| `$C041` | TX_DATA | IP (W) | Dato a transmitir (escribir inicia TX) |
-| `$C042` | STATUS | IP (R) | Estado de la transferencia |
-| `$C043` | CONTROL | IP (R/W) | Control de interrupciones |
+| `$C040` | RX_DATA | R | Dato recibido del SPI |
+| `$C041` | TX_DATA | W | Dato a transmitir (escribir inicia TX) |
+| `$C042` | STATUS | R | Estado de la transferencia |
+| `$C043` | CONTROL | R/W | 4 bits sin efecto; el SPI no genera IRQ |
 | `$C044` | SS_MASK | Local (R/W) | Máscara de Slave Select (bit0=CS0, etc) |
 | `$C045` | CS_ENABLE | Local (R/W) | bit0=1 activa los CS seleccionados |
 | `$C046-$C047` | - | - | Reservado |
@@ -260,8 +260,7 @@ wait:
     STA $C045       ; CS_ENABLE = 0
 ```
 
-**Nota:** El IP Gowin tiene el registro Slave Select en dirección 0x10, 
-inaccesible con I_WADDR de 3 bits. Por eso el wrapper maneja CS manualmente
+**Nota:** los CS se manejan por software con los registros locales
 con registros locales ($C044, $C045)
 
 ### Registros SID 6581 (Compatible C64)

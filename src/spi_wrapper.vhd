@@ -4,10 +4,10 @@
 -- Direccion base: $C040 (8 registros)
 --
 -- Registros CPU:
---   $C040 (0): RX Data     -> IP 0x00 (read only)
---   $C041 (1): TX Data     -> IP 0x01 (write inicia transferencia)
---   $C042 (2): Status      -> IP 0x02 (read only)
---   $C043 (3): Control     -> IP 0x04 (interrupts, etc)
+--   $C040 (0): RX Data     -> reg 0x00 (read only)
+--   $C041 (1): TX Data     -> reg 0x01 (write inicia transferencia)
+--   $C042 (2): Status      -> reg 0x02 (read only)
+--   $C043 (3): Control     -> 4 bits de uso libre (sin efecto)
 --   $C044 (4): Slave Sel   -> LOCAL (mascara CS, bit0=CS0, bit1=CS1, etc)
 --   $C045 (5): CS Control  -> LOCAL (bit0=1 activa CS seleccionado)
 --
@@ -36,40 +36,16 @@ end spi_wrapper;
 
 architecture rtl of spi_wrapper is
 
-    component SPI_MASTER_Top
-        port (
-            I_CLK       : in  std_logic;
-            I_RESETN    : in  std_logic;
-            I_TX_EN     : in  std_logic;
-            I_WADDR     : in  std_logic_vector(2 downto 0);
-            I_WDATA     : in  std_logic_vector(7 downto 0);
-            I_RX_EN     : in  std_logic;
-            I_RADDR     : in  std_logic_vector(2 downto 0);
-            O_RDATA     : out std_logic_vector(7 downto 0);
-            O_SPI_INT   : out std_logic;
-            MISO_MASTER : in  std_logic;
-            MOSI_MASTER : out std_logic;
-            SS_N_MASTER : out std_logic_vector(3 downto 0);
-            SCLK_MASTER : out std_logic;
-            MISO_SLAVE  : out std_logic;
-            MOSI_SLAVE  : in  std_logic;
-            SS_N_SLAVE  : in  std_logic;
-            SCLK_SLAVE  : in  std_logic
-        );
-    end component;
-
     -- Decodificacion
     signal cs           : std_logic;
     signal cpu_reg      : std_logic_vector(2 downto 0);
     
-    -- Senales al IP
+    -- Senales al SPI master
     signal ip_waddr     : std_logic_vector(2 downto 0);
     signal ip_raddr     : std_logic_vector(2 downto 0);
     signal tx_en        : std_logic := '0';
     signal rx_en        : std_logic;
     signal spi_rdata    : std_logic_vector(7 downto 0);
-    signal spi_int      : std_logic;
-    signal ip_cs_n      : std_logic_vector(3 downto 0);
     
     -- Registros locales para CS
     signal ss_mask      : std_logic_vector(3 downto 0) := "0000";
@@ -87,41 +63,35 @@ begin
     cs <= '1' when cpu_addr(15 downto 3) = "1100000001000" else '0';
     cpu_reg <= cpu_addr(2 downto 0);
 
-    -- Direccion del IP para escritura
+    -- Direccion del registro para escritura
     ip_waddr <= "001" when cpu_reg = "001" else  -- TX (0x01)
                 "100" when cpu_reg = "011" else  -- Control (0x04)
                 "000";
 
-    -- Direccion del IP para lectura (combinacional)
+    -- Direccion del registro para lectura (combinacional)
     ip_raddr <= "000" when cpu_reg = "000" else  -- RX (0x00)
                 "001" when cpu_reg = "001" else  -- TX (0x01)
                 "010" when cpu_reg = "010" else  -- Status (0x02)
                 "100" when cpu_reg = "011" else  -- Control (0x04)
                 "000";
 
-    -- RX_EN siempre activo cuando leemos del IP (registros 0-3)
+    -- RX_EN siempre activo cuando leemos del SPI master (registros 0-3)
     rx_en <= '1' when (cs = '1' and cpu_rw = '1' and cpu_reg(2) = '0') else '0';
 
-    -- Instancia del SPI Master
-    spi_master_inst: SPI_MASTER_Top
+    -- SPI master propio (sin latches)
+    spi_master_inst: entity work.spi_master
         port map (
-            I_CLK       => clk,
-            I_RESETN    => rst_n,
-            I_TX_EN     => tx_en,
-            I_WADDR     => ip_waddr,
-            I_WDATA     => cpu_data_in,
-            I_RX_EN     => rx_en,
-            I_RADDR     => ip_raddr,
-            O_RDATA     => spi_rdata,
-            O_SPI_INT   => spi_int,
-            MISO_MASTER => spi_miso,
-            MOSI_MASTER => spi_mosi,
-            SS_N_MASTER => ip_cs_n,
-            SCLK_MASTER => spi_sclk,
-            MISO_SLAVE  => open,
-            MOSI_SLAVE  => '0',
-            SS_N_SLAVE  => '1',
-            SCLK_SLAVE  => '0'
+            clk   => clk,
+            rst_n => rst_n,
+            tx_en => tx_en,
+            waddr => ip_waddr,
+            wdata => cpu_data_in,
+            rx_en => rx_en,
+            raddr => ip_raddr,
+            rdata => spi_rdata,
+            miso  => spi_miso,
+            mosi  => spi_mosi,
+            sclk  => spi_sclk
         );
 
     -- CS manual
@@ -183,6 +153,6 @@ begin
     -- Salida al bus
     cpu_data_out <= data_out when (cs = '1' and cpu_rw = '1') else (others => 'Z');
     
-    spi_irq <= spi_int;
+    spi_irq <= '0';   -- el IP tampoco la activaba nunca (su registro de control no era accesible)
 
 end rtl;
