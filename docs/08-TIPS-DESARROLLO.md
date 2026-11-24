@@ -129,12 +129,11 @@ armar un dibujo de 16×16 con 4 patrones distintos.
 Por **overscan** del monitor/TV, las filas superior e inferior pueden recortarse.
 Mantén el contenido importante entre las filas **1 y 28**.
 
-### 1.10 Boot: el auto-boot no se repite tras un reset
+### 1.10 Boot: flag de auto-arranque en `$C004`
 
-El monitor usa un **flag en RAM** (`$3FFE-$3FFF`) para no auto-arrancar `BOOT.INI`
-más de una vez por sesión. Como **la RAM no se borra con el reset** (botón S1), tras
-resetear el monitor **no vuelve a auto-bootear**. Es esperado. Para forzar otro
-auto-boot, hay que limpiar ese flag (o reiniciar la placa por completo).
+El monitor v2.7.0 guarda el control del auto-arranque de `BOOT.INI` en el **bit 0 de
+`$C004`** (ya no en RAM, `$3FFE-$3FFF`): **1 = auto-arranca**, 0 = no. Es un registro
+que **S1 no borra**; vuelve a 0 al apagar o al recargar el bitstream (Manual §2.5).
 
 ---
 
@@ -163,7 +162,7 @@ entre sprites) requiere **guardar copias en registros** durante el blank.
 El reset (`rst_n`, botón S1) reinicia **CPU y vídeo**, pero **no toca la RAM**
 (`$0000-$7FFF`). Consecuencias:
 - Los programas deben **inicializar su RAM** al arrancar si asumen ceros.
-- Flags persistentes en RAM **sobreviven** al reset (ver §1.10).
+- Los datos en RAM **sobreviven** al reset.
 
 ### 2.4 El reset (S1): polaridad y filtro anti-rebote
 
