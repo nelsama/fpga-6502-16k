@@ -2,9 +2,34 @@
 
 Computador retro basado en el procesador **MOS 6502** implementado en una [**Sipeed Tang Nano 9K**](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html) (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, SPI, UART, **chip de sonido SID 6581** y **salida de vídeo HDMI** (tiles + sprites, para juegos retro).
 
-> 🆕 **Versión 16K**: ROM ampliada a 16KB ($8000-$BFFF) para mayor espacio de programa.
+> 🆕 **32 KB de RAM** (`$0000-$7FFF`) y 16 KB de ROM (`$8000-$BFFF`). La ROM incluida es el
+> **monitor v2.7.0**.
 
-Esta versión del hardware es compatible con la versión 2.4.1 del firmware monitor.
+### Novedades (noviembre de 2026)
+
+| Cambio | Antes | Ahora |
+|---|---|---|
+| RAM del CPU | 16 KB (BSRAM) | **32 KB** (2 KB BSRAM + 30 KB PSRAM), sin wait-states |
+| Sprites por línea | 8 | **12** |
+| Transparencia entre sprites | no | **sí** |
+| SPI | IP de Gowin (3 latches) | módulo propio sin latches, mismos registros |
+| PLL de audio | pedía 648 MHz, fuera de rango | **81 MHz** |
+| Restricciones de reloj (SDC) | vacías | relojes reales |
+
+**Recursos de la FPGA:**
+
+| Recurso | Uso | Total |
+|---|---:|---:|
+| Lógica (LUT + ALU + RAM16) | 4822 (56 %) | 8640 |
+| Registros | 2600 (39 %) | 6771 |
+| CLS | 3300 (77 %) | 4320 |
+| BSRAM | 19 (73 %) | 26 |
+| DSP | 2 | 10 |
+| PLL | 2 | 2 |
+
+Los programas anteriores funcionan sin cambios en los registros. Cambia lo que se ve: aparecen
+los sprites 9.º a 12.º de una línea y los huecos de un sprite dejan ver el de detrás. Además,
+`OVERFLOW` (`$D803` bit 6) se activa al llegar a 12 sprites en una línea, y no a 8.
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -12,10 +37,10 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                         Board.vhd (Top-Level)                             │
 │                                                                           │
-│  CLOCK_27MHz ──▶ [PLL ×3] ──▶ 81 MHz ──▶ SID PWM DAC                       │
+│  CLOCK_27MHz ──▶ [PLL ×3] ──▶ 81 MHz ──▶ SID DAC + PSRAM                  │
 │      │                                                                    │
 │      ├──▶ [CLKDIV] ──▶ 6.75 MHz ──▶ /2 ──▶ 3.375 MHz (CPU)                │
-│      │                     └──▶ /7 ──▶ ~1 MHz (SID)                       │
+│      ├──▶ [/28] ──▶ ~0.96 MHz (SID)                                       │
 │      │                                                                    │
 │      └──▶ [PLL ×5] ──▶ 135 MHz (TMDS)                                     │
 │                                                                           │
@@ -28,11 +53,11 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 │    ▼          ▼          ▼            ▼         ▼          ▼          ▼   │
 │ ┌────────┐┌────────┐┌────────────┐┌────────┐┌──────────┐┌──────────┐      │
 │ │  RAM   ││  ROM   ││ Puertos I/O││SID 6581││SPI Master││  Vídeo   │      │
-│ │ 16 KB  ││ 16 KB  ││GPIO+I2C+UAR││ Audio  ││ SD Card  ││  HDMI    │      │
+│ │ 32 KB  ││ 16 KB  ││GPIO+I2C+UAR││ Audio  ││ SD Card  ││  HDMI    │      │
 │ └────────┘└────────┘└────────────┘└───┬────┘└────┬─────┘└────┬─────┘      │
-│                                        │ PWM      │ SPI        │ TMDS       │
+│                                        │          │           │            │
 │                                                                           │
-│                  [Audio Out]      [SD Card]      [HDMI out]              │
+│                                   [Audio]   [SD Card]   [HDMI]            │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -48,12 +73,13 @@ Esta versión del hardware es compatible con la versión 2.4.1 del firmware moni
 | `$C002` | 1 byte | **Config Puerto 1** (0=salida, 1=entrada) |
 | `$C003` | 1 byte | **Config Puerto 2** (0=salida, 1=entrada) |
 | `$C004` | 1 byte | **Flag de usuario** (bit 0 R/W, persistente al reset) |
+| `$C005` | 1 byte | **Pulsadores** (bit 0 = A, bit 1 = B; 0 = pulsado) |
 | `$C010 - $C017` | 8 bytes | **Registros I2C Master** |
 | `$C020 - $C023` | 4 bytes | **Registros UART** |
 | `$C030 - $C03F` | 16 bytes | **Timer de precisión** |
 | `$C040 - $C047` | 8 bytes | **SPI Master** (SD Card) |
 | `$D400 - $D41F` | 32 bytes | **SID 6581** (compatible C64) |
-| `$D800 - $D812` | 19 bytes | **Vídeo** (VRAM indirecta + registros) |
+| `$D800 - $D818` | 25 bytes | **Vídeo** (VRAM indirecta + registros) |
 | `$FFFA - $FFFF` | 6 bytes | **Vectores** (mapeados a ROM $BFFA-$BFFF) |
 
 ### Registros de Video
@@ -81,6 +107,7 @@ El CPU controla el motor de video (tiles + sprites, estilo NES/VIC-II) por un
 | `$D815` | `PAL_HI` | W | Color de paleta, bits 11:8 → escribe + auto-incrementa `PAL_PTR` |
 | `$D816` | `SETUP` | W | Escribir cualquier valor **dispara el setup de hardware** (limpiar VRAM + re-expandir fuente) |
 | `$D817` | `SETUP_ST` | R | Estado del setup: bit0 = BUSY, bit4 = VIDEO_READY |
+| `$D818` | `FONT_COLOR` | W | Color del trazo de la fuente (0-3); se aplica en el siguiente `SETUP` |
 
 **Areas** (`$D801` bits 7:6): `00`=tilemap, `01`=atributos, `10`=patrones fondo,
 `11`=sprite/OAM (bit 3: `0`=OAM, `1`=patron de sprite).
@@ -93,8 +120,8 @@ el puntero (satura en 31, no vuelve a 0). **BG_COLOR = la entrada 15 de la palet
 fondo** (`$D813=15`).
 
 **Setup de video por hardware** (`$D816`): escribe cualquier valor para limpiar la
-VRAM (tilemap, atributos, patrones, sprites) y **re-expandir la fuente de texto**,
-todo en ~120-275 µs. Mientras corre, las escrituras del CPU a la VRAM/OAM se
+VRAM (tilemap, atributos, patrones de fondo 0-7 y de sprite 0-2) y **re-expandir la
+fuente de texto**, todo en ~184 µs. No borra el OAM. Mientras corre, las escrituras del CPU a la VRAM/OAM se
 ignoran (`$D817` bit0 = BUSY) y la pantalla queda del color de fondo. No toca RAM,
 ROM, paletas, scroll ni bandas. Ver el manual §11.3.
 
@@ -125,6 +152,9 @@ Ejemplo (mover el sprite 0 a X=100, Y=80, tile 0, paleta 0):
 **FLAGS del sprite**: bit 7 FLIP_Y, bit 6 FLIP_X, bit 5 PRIO (1=detras del fondo),
 bit 4 SCALE2X, bit 2 = bit 8 de X, bits 1:0 paleta. **Y >= 248 deshabilita el sprite.**
 **X es de 9 bits** (0-511; cubre toda la pantalla de 320 px).
+
+**Solapes:** en cada píxel se ve el sprite **opaco** de menor índice; donde es color 0 se
+ve el sprite de detrás. **Hasta 12 sprites por línea.**
 
 > 📖 **Manual completo:** [`docs/07-MANUAL-PROGRAMACION.md`](docs/07-MANUAL-PROGRAMACION.md)
 
@@ -320,7 +350,8 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 | Señal | Frecuencia | Uso |
 |-------|------------|-----|
 | `CLOCK_27_i` | 27 MHz | Entrada del cristal |
-| `clk_81mhz` | 81 MHz | PWM DAC del SID (PLL ×3, ~19.78 kHz PWM) |
+| `clk_81mhz` | 81 MHz | DAC del SID y PSRAM (PLL ×3) |
+| `clk_81mhz_p` | 81 MHz, +90° | Reloj de salida hacia la PSRAM |
 | `system_clk` | 6.75 MHz | Reloj del sistema |
 | `cpu_clk` | **3.375 MHz** | Reloj del CPU 6502 |
 | `clk_1mhz` | ~0.96 MHz | Reloj del SID 6581 (27MHz/28) |
@@ -406,6 +437,15 @@ programa conserve un dato de estado entre reinicios.
 > Al escribir se guarda **solo el bit 0** del dato; el resto de bits se ignoran
 > al escribir y leen siempre 0.
 
+### Pulsadores (`$C005`)
+- bit 0 = `BTN_A` (pin 86), bit 1 = `BTN_B` (pin 85). **0 = pulsado.**
+- Pulsador a GND, con pull-up interno. Pines de **1,8 V**. Sin antirrebote en hardware.
+
+### SPI Master
+- `src/spi_master.vhd`: módulo propio, sin latches. Modo 0, SCK 3,375 MHz, cola de 1 byte.
+- Mismos registros y tiempos que el IP de Gowin al que sustituye (comparado en simulación:
+  2,85 millones de ciclos, 0 diferencias).
+
 ### Sistema de Reset
 - Generador de power-on reset (50ms)
 - Debouncer para botón de reset externo
@@ -416,14 +456,14 @@ programa conserve un dato de estado entre reinicios.
 - **3 voces** con formas de onda: Triangle, Sawtooth, Pulse, Noise
 - **Filtro multimodo**: Low-pass, Band-pass, High-pass, Notch
 - **ADSR envelope** por voz con aproximación exponencial por tramos
-- **Salida**: PWM de alta frecuencia (pin 33)
+- **Salida**: DAC de alta frecuencia por los pines **76** (L) y **77** (R), la misma señal en ambos
 - **Reloj SID**: ~1 MHz (derivado de 27 MHz)
 - **Reloj filtros**: 27 MHz
-- **Reloj DAC PWM**: 81 MHz (PLL ×3 desde 27 MHz) → ~19.78 kHz de frecuencia PWM
+- **Reloj del DAC**: 81 MHz (PLL ×3 desde 27 MHz)
 - **Resolución interna**: 12 bits (fiel al SID original)
 - **Direccionamiento**: $D400-$D41F (compatible C64)
 - **Sincronización**: Cross-domain entre CPU (6.75 MHz) y SID (27 MHz)
-- **Mejora de audio**: PLL para PWM de alta frecuencia, reduce ruido de alta frecuencia sin alterar el sonido original
+- **Mejora de audio**: PLL para un DAC de alta frecuencia, reduce ruido de alta frecuencia sin alterar el sonido original
 
 **¿Por qué 6581 y no 8580?**
 
@@ -438,9 +478,9 @@ El 6581 tiene un "bug" de DC offset que permite reproducir samples digitales, co
 
 **Circuito de audio recomendado:**
 ```
-Pin 33 ──[3.3kΩ]──┬──[4.7nF]── GND
-                  │
-                  └── Amplificador/Altavoz
+Pin 76/77 ──[3.3kΩ]──┬──[4.7nF]── GND
+                     │
+                     └── Amplificador/Altavoz
 ```
 
 ### Módulo de Vídeo (HDMI)
@@ -448,23 +488,24 @@ Pin 33 ──[3.3kΩ]──┬──[4.7nF]── GND
 Coprocesador gráfico estilo NES/VIC-II, **sin framebuffer** (tiles + sprites).
 Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 68-75).
 
-- **Capas:** margen azul → fondo (tiles) → sprites (con prioridad/transparencia).
+- **Capas:** margen (`BG_COLOR`) → fondo (tiles) → sprites (con prioridad).
 - **Fondo:** tilemap de **64×32 celdas** (mayor que la pantalla 40×30 → scroll),
   256 patrones de 8×8 en **2bpp** (4 colores c/u).
 - **Sprites:** 32 en OAM (8×8), 64 patrones, con flips X/Y, prioridad, **escala 2×**,
-  **X de 9 bits** (0-511). **Hasta 12 sprites por línea** (límite fijado en el
-  diseño; ver el manual §13).
+  **X de 9 bits** (0-511) y **transparencia entre sprites**. **Hasta 12 sprites por
+  línea** (ver el manual §13).
 - **Scroll** horizontal y vertical sobre el mapa, con envoltura.
 - **Split de raster:** hasta **3 bandas** con scroll independiente (HUD fijo arriba/abajo).
 - **Modo texto:** charset del C64 (96 caracteres) como tiles (`tile = ASCII`).
 - **Colisión sprite↔tile** (celdas sólidas) con punto de colisión configurable y
   auto-escala 1×/2×. La colisión sprite↔sprite se hace por software.
 - **Setup de hardware** (`$D816`): limpia toda la VRAM y re-expande la fuente de
-  texto en ~120-275 µs, para cambiar de pantalla sin hacerlo celda a celda.
+  texto en ~184 µs, para cambiar de pantalla sin hacerlo celda a celda.
 - **Estados en STATUS** (`$D803`): VBLANK, SPRITE_OVERFLOW, SOLID_HIT, VIDEO_READY.
-- **Recursos:** ~6.400 celdas de lógica (74%), BSRAM de vídeo = 6/26 bloques, 2 DSP.
+- **Recursos:** 6 bloques BSRAM; el OAM y el line buffer están en RAM distribuida.
 
 > 📖 **Manual de programación (para juegos):** [`docs/07-MANUAL-PROGRAMACION.md`](docs/07-MANUAL-PROGRAMACION.md)
+> (el Apéndice B es la especificación exacta para el emulador)
 > · **Tips de desarrollo:** [`docs/08-TIPS-DESARROLLO.md`](docs/08-TIPS-DESARROLLO.md)
 > · Arquitectura y detalles: [`docs/`](docs/README.md)
 
@@ -496,8 +537,8 @@ Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 
                          ──┐                                  ┌──
                            │                                  │
   🔵 [ spi_cs_n[0] ]  38 ──┼─ IOB31B                  IOR5A  ─┼── 63  [    LIBRE    ] 🟢
-  🔵 [  spi_mosi   ]  37 ──┼─ IOB31A                  IOT8A  ─┼── 86  [    LIBRE    ] ⚪
-  🔵 [  spi_sclk   ]  36 ──┼─ IOB29B                  IOT8B  ─┼── 85  [    LIBRE    ] ⚪
+  🔵 [  spi_mosi   ]  37 ──┼─ IOB31A                  IOT8A  ─┼── 86  [    btn_a    ] ⚪
+  🔵 [  spi_sclk   ]  36 ──┼─ IOB29B                  IOT8B  ─┼── 85  [    btn_b    ] ⚪
   🔵 [  spi_miso   ]  39 ──┼─ IOB33A                  IOT10A ─┼── 84  [    LIBRE    ] ⚪
                            │                                  │
   🔵 [ spi_cs_n[1] ]  25 ──┼─ IOB8A                   IOT10B ─┼── 83  [    LIBRE    ] ⚪
@@ -546,7 +587,10 @@ src/
 ├── Board.vhd                 # Top-level entity
 ├── A6502.vhd                 # Wrapper del CPU
 ├── Data_bus_mux.vhd          # Multiplexor del bus de datos
-├── rom.vhd                   # ROM con programa (8KB)
+├── rom.vhd                   # ROM con el monitor (16 KB)
+├── ram_2k.vhd                # RAM en BSRAM: página cero y pila
+├── spi_master.vhd            # SPI master propio
+├── spi_wrapper.vhd           # Wrapper SPI para bus 6502
 ├── register_8bit.vhd         # Registro para puertos GPIO
 ├── Reset.vhd                 # Generador de reset
 ├── Debouncer.vhd             # Anti-rebote
@@ -556,6 +600,8 @@ src/
 ├── timer_rtc.vhd             # Timer de precisión
 ├── timer_wrapper.vhd         # Wrapper Timer para bus 6502
 ├── sid_wrapper.vhd           # Wrapper SID para bus 6502
+├── 6502_board.cst            # Pines
+├── 6502_board_v2_1.sdc       # Relojes (necesario para la PSRAM)
 ├── 6502/
 │   └── cpu65xx_fast.vhd      # Core del CPU 6502
 ├── NetSID/                   # Chip de sonido SID 6581
@@ -563,11 +609,13 @@ src/
 │       ├── sid_6581.vhd      # Core principal SID
 │       ├── sid_voice.vhd     # Generador de voz
 │       ├── sid_filters.vhd   # Filtros analógicos
-│       ├── sid_components.vhd # Componentes auxiliares
-│       └── dac.vhd           # DAC Delta-Sigma para audio
+│       ├── sid_coeffs.vhd    # Coeficientes de los filtros
+│       └── sid_components.vhd # Componentes auxiliares (DAC incluido)
 ├── gowin_clkdiv_*/           # IP divisor de reloj
-├── gowin_pll_81mhz/          # PLL 27→81 MHz para PWM DAC
-├── gowin_sp/                 # IP RAM
+├── gowin_pll_81mhz/          # PLL 27→81 MHz (DAC y PSRAM)
+├── psram/                    # RAM del CPU en la PSRAM interna
+│   ├── psram_burst.vhd       # Controlador (Apache 2.0)
+│   └── psram_ram.vhd         # Puente con el CPU
 ├── i2c_master/               # IP I2C Master
 ├── hdmi/                     # Módulo de video (tiles + sprites)
 │   ├── video_core.vhd        # Motor: tiles, sprites, scroll, paletas
@@ -581,6 +629,8 @@ src/
     ├── demo_collision.asm    # Demo de colisión y rebote
     ├── demo_scale2x.asm      # Demo de escalado 2x
     ├── demo_x9.asm           # Demo de X de 9 bits (extremo a extremo)
+    ├── demo_buttons.asm      # Pulsadores $C005
+    ├── demo_fontcolor.asm    # Colores del texto
     ├── test_psram.asm        # Prueba de la RAM en PSRAM
     ├── demo_spr12.asm        # Prueba de 12 sprites en la misma línea
     ├── demo_raster.asm       # Demo de split de raster (HUD)
@@ -596,7 +646,7 @@ impl/                         # Archivos de implementación (generados)
 - **Sipeed Tang Nano 9K** - FPGA de bajo costo pero muy versátil con chip Gowin GW1NR-9
   - 🛒 **Dónde comprar**: [AliExpress - Tang Nano 9K](https://www.aliexpress.com/w/wholesale-Tang-Nano-9K.html)
   - 💰 **Precio de referencia**: ~$14-20 USD (varía según vendedor y promociones)
-  - 📊 **Características**: 9K LUTs, 32 bloques BSRAM, 2 PLLs, múltiples periféricos I/O
+  - 📊 **Características**: 8640 LUTs, 26 bloques BSRAM, 8 MB de PSRAM interna, 2 PLLs, múltiples periféricos I/O
   - ✨ **Ventajas**: Precio accesible, ecosistema activo, herramientas gratuitas (Gowin EDA)
 - Cable USB-C para programación y alimentación
 - (Opcional) Monitor/TV con **HDMI** para la salida de vídeo
@@ -628,6 +678,13 @@ impl/                         # Archivos de implementación (generados)
    - **Generate Bitstream** - Generar archivo `.fs`
 4. El bitstream generado estará en: `impl/pnr/6502_board_v3.fs`
 
+También por línea de comandos: `gw_sh impl/build.tcl` (ajusta la ruta del proyecto en el script).
+
+> - El proyecto usa **`Place Option = 1`**. Si el IDE ya estaba abierto al actualizar el código,
+>   **cierra y reabre el proyecto** antes de compilar.
+> - Comprueba en el informe que `Register as Latch` sea **0** y que los relojes cumplan (el de
+>   la PSRAM, `mem`, necesita 81 MHz).
+
 ### 2. Programar la FPGA
 
 **Opción A: Desde Gowin EDA**
@@ -649,12 +706,15 @@ impl/                         # Archivos de implementación (generados)
 Una vez programado:
 - El LED de la placa debería indicar actividad
 - Conectar terminal serie a 115200 baud para comunicación UART
-- La CPU 6502 ejecutará el código almacenado en ROM
+- La CPU 6502 ejecutará el monitor almacenado en ROM
+- `src/asm/test_psram.asm` (en `$0800`) prueba la RAM en PSRAM: fondo verde = sin errores
+- `src/asm/demo_spr12.asm` (en `$0800`) muestra 12 sprites en la misma línea
 
 ## 📜 Créditos
 
 - **CPU 6502 Core**: Peter Wendrich ([FPGA64 Project](http://www.syntiac.com/fpga64.html))
 - **SID 6581 Core**: NetSID Project (implementación VHDL del chip de sonido)
+- **Controlador de PSRAM**: basado en [psram-tang-nano-9k](https://github.com/zf3/psram-tang-nano-9k) de Feng Zhou, Apache 2.0 (`src/psram/LICENSE-APACHE-2.0.txt`)
 
 
 ## 💖 Apóyame
