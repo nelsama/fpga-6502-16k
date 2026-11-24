@@ -226,9 +226,9 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
 
 | Recurso | Uso | Total | Libre |
 |---|---|---|---|
-| CLS | 3541 (82%) | 4320 | 779 |
+| CLS | 3552 (82%) | 4320 | 768 |
 | Register (FF) | 2734 (41%) | 6771 | 4037 |
-| Logic (LUT + ALU + RAM16) | 5250 (61%) | 8640 | 3390 |
+| Logic (LUT + ALU + RAM16) | 5315 (62%) | 8640 | 3325 |
 | **BSRAM** | **19 (73%)** | 26 | **7** |
 | DSP | 2 | 10 | 8 |
 | PLL | 2 | 2 | 0 |

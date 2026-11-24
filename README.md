@@ -21,9 +21,9 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 
 | Recurso | Uso | Total |
 |---|---:|---:|
-| Lógica (LUT + ALU + RAM16) | 5250 (61 %) | 8640 |
+| Lógica (LUT + ALU + RAM16) | 5315 (62 %) | 8640 |
 | Registros | 2734 (41 %) | 6771 |
-| CLS | 3541 (82 %) | 4320 |
+| CLS | 3552 (82 %) | 4320 |
 | BSRAM | 19 (73 %) | 26 |
 | DSP | 2 | 10 |
 | PLL | 2 | 2 |

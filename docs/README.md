@@ -26,9 +26,9 @@ eliminar ningún módulo existente.
 
 | Recurso | Uso final | Libre | ¿Alcanza? |
 |---------|-----------|-------|-----------|
-| Lógica | 5.250 (61%) | 3.390 | ✅ |
+| Lógica | 5.315 (62%) | 3.325 | ✅ |
 | FF | 2.734 (41%) | 4.037 | ✅ |
-| CLS | 3.541 (82%) | 779 | ✅ |
+| CLS | 3.552 (82%) | 768 | ✅ |
 | BSRAM | 19/26 | 7 | ✅ |
 | PLL | 2/2 | 0 | ⚠️ agotados |
 | DSP | 2/10 | 8 | ✅ |

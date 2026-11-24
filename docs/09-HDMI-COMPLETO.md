@@ -269,8 +269,8 @@ Los paquetes fijos se calculan al sintetizar, con su BCH. Solo el de audio se ca
 
 - **Monitor:** imagen y audio correctos en la placa (2026-11-24).
 - **Teles Samsung y LG recientes:** **«Sin señal»**. **Sin resolver.** Probado sin éxito con más
-  fuerza de salida (`DRIVE=16`). «Sin señal» apunta a la detección (5 V de la patilla 18) o al
+  y menos fuerza de salida (`DRIVE` 16 y 4) y solo imagen (`FULL => false`). «Sin señal» apunta a la detección (5 V de la patilla 18) o al
   nivel eléctrico, no al audio ni a los InfoFrames. Hay al menos otro caso publicado de Tang Nano 9K
-  que va en un monitor y no en una Samsung. Pendiente: medir los 5 V, `FULL => false` y un
+  que va en un monitor y no en una Samsung. Pendiente: medir los 5 V y probar un
   splitter con alimentación propia.
 - Integrado también en los proyectos NES y Master System (monitor).
