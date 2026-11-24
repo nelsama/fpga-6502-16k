@@ -247,15 +247,15 @@ No todas las paletas son iguales: **pal0** color1 = azul, **pal1** = marrón/nar
   de menos sprites por línea.
 - **Periféricos** (i2c/uart/spi) — solo si NO los usas (tú sí los usas).
 
-### 3.3 La PSRAM NO es una vía para liberar recursos
+### 3.3 PSRAM: no sirve para VRAM ni ROM, pero es viable como RAM del CPU
 
-La Tang Nano 9K tiene **8 MB de PSRAM embebida** (pines dedicados). Pero:
+La Tang Nano 9K tiene **8 MB de PSRAM embebida** (pines dedicados).
 
-- **Lenta:** ~12 ciclos por byte (vs 1 de la BSRAM) → **no sirve como VRAM** en tiempo real.
-- **Volátil:** arranca vacía → **no sirve como ROM** (no se puede precargar desde el bitstream).
-- **Su controlador consume CLS/LUT** → consume parte del margen liberado.
-- Para el **CPU** sí podría usarse (tiene `enable` = wait-states), pero el balance de
-  CLS es negativo si solo mueves los 16 KB actuales.
+- **No sirve como VRAM** en tiempo real (unos 14 ciclos de 81 MHz por lectura suelta) ni
+  **como ROM** (arranca con basura).
+- **RAM del CPU ($0000-$7FFF):** viable sobre el papel, sin wait-states. Lectura 14 ciclos
+  y escritura 9 a 81 MHz con latencia fija; un ciclo de CPU son 24. Liberaría 8 BSRAM.
+  Sin implementar.
 
 ---
 
