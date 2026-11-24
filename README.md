@@ -15,14 +15,15 @@ Computador retro basado en el procesador **MOS 6502** implementado en una [**Sip
 | SPI | IP de Gowin (3 latches) | módulo propio sin latches, mismos registros |
 | PLL de audio | pedía 648 MHz, fuera de rango | **81 MHz** |
 | Restricciones de reloj (SDC) | vacías | relojes reales |
+| Salida HDMI | DVI (solo imagen) | **HDMI con audio** y sincronismos 480p estándar |
 
 **Recursos de la FPGA:**
 
 | Recurso | Uso | Total |
 |---|---:|---:|
-| Lógica (LUT + ALU + RAM16) | 4822 (56 %) | 8640 |
-| Registros | 2600 (39 %) | 6771 |
-| CLS | 3300 (77 %) | 4320 |
+| Lógica (LUT + ALU + RAM16) | 5250 (61 %) | 8640 |
+| Registros | 2734 (41 %) | 6771 |
+| CLS | 3541 (82 %) | 4320 |
 | BSRAM | 19 (73 %) | 26 |
 | DSP | 2 | 10 |
 | PLL | 2 | 2 |
@@ -42,7 +43,7 @@ los sprites 9.º a 12.º de una línea y los huecos de un sprite dejan ver el de
 │      ├──▶ [CLKDIV] ──▶ 6.75 MHz ──▶ /2 ──▶ 3.375 MHz (CPU)                │
 │      ├──▶ [/28] ──▶ ~0.96 MHz (SID)                                       │
 │      │                                                                    │
-│      └──▶ [PLL ×5] ──▶ 135 MHz (TMDS)                                     │
+│      └──▶ [PLL ×5] ──▶ 135 MHz (TMDS) ──▶ /5 ──▶ 27 MHz (píxel)            │
 │                                                                           │
 │  ┌─────────────────────────────────────────────────────────────────────┐  │
 │  │                      CPU 6502 (cpu65xx_fast)                        │  │
@@ -384,7 +385,7 @@ que deba volver al monitor no puede pisar `$3E00-$3FFF`.
 | `cpu_clk` | **3.375 MHz** | Reloj del CPU 6502 |
 | `clk_1mhz` | ~0.96 MHz | Reloj del SID 6581 (27MHz/28) |
 | `clk_fast` | 27 MHz | Filtros digitales del SID |
-| `clk_pixel` | 27 MHz | Píxel del vídeo (720×480) |
+| `clk_pixel` | 27 MHz | Píxel del vídeo (720×480): 135 MHz / 5 con CLKDIV |
 | `clk_serial` | 135 MHz | TMDS (PLL ×5 de 27 MHz) para HDMI |
 
 ## 🔧 Componentes
@@ -484,7 +485,7 @@ programa conserve un dato de estado entre reinicios.
 - **3 voces** con formas de onda: Triangle, Sawtooth, Pulse, Noise
 - **Filtro multimodo**: Low-pass, Band-pass, High-pass, Notch
 - **ADSR envelope** por voz con aproximación exponencial por tramos
-- **Salida**: DAC de alta frecuencia por los pines **76** (L) y **77** (R), la misma señal en ambos
+- **Salida**: DAC de alta frecuencia por los pines **76** (L) y **77** (R), la misma señal en ambos, y por **HDMI** (48 kHz, 16 bits)
 - **Reloj SID**: ~1 MHz (derivado de 27 MHz)
 - **Reloj filtros**: 27 MHz
 - **Reloj del DAC**: 81 MHz (PLL ×3 desde 27 MHz)
@@ -514,7 +515,9 @@ Pin 76/77 ──[3.3kΩ]──┬──[4.7nF]── GND
 ### Módulo de Vídeo (HDMI)
 
 Coprocesador gráfico estilo NES/VIC-II, **sin framebuffer** (tiles + sprites).
-Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 68-75).
+Salida **HDMI con audio** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 68-75).
+El SID es mono: suena igual por los dos canales. Para monitores solo DVI, genérico
+`HDMI_FULL => false` en `video_core.vhd`.
 
 - **Capas:** margen (`BG_COLOR`) → fondo (tiles) → sprites (con prioridad).
 - **Fondo:** tilemap de **64×32 celdas** (mayor que la pantalla 40×30 → scroll),
@@ -535,6 +538,7 @@ Salida **HDMI** a 320×240 lógicos (720×480 físicos a 60 Hz) por TMDS (pines 
 > 📖 **Manual de programación (para juegos):** [`docs/07-MANUAL-PROGRAMACION.md`](docs/07-MANUAL-PROGRAMACION.md)
 > (el Apéndice B es la especificación exacta para el emulador)
 > · **Tips de desarrollo:** [`docs/08-TIPS-DESARROLLO.md`](docs/08-TIPS-DESARROLLO.md)
+> · **HDMI completo en otros proyectos:** [`docs/09-HDMI-COMPLETO.md`](docs/09-HDMI-COMPLETO.md)
 > · Arquitectura y detalles: [`docs/`](docs/README.md)
 
 ## 📌 FPGA Target
@@ -649,7 +653,8 @@ src/
 │   ├── video_core.vhd        # Motor: tiles, sprites, scroll, paletas
 │   ├── video_vram.vhd        # VRAM (tilemap, atributos, patrones, sprites, fuente)
 │   ├── video_bus.vhd         # Puente CPU -> VRAM + registros
-│   ├── hdmi_module.vhd       # Salida TMDS (HDMI)
+│   ├── hdmi_tx.vhd           # Transmisor HDMI con audio
+│   ├── hdmi_phy.vhd          # Relojes y serializadores
 │   ├── tmds_encoder_2.vhd    # Codificador TMDS (8b/10b)
 │   └── font_data.vhd         # Fuente del C64 precargada
 └── asm/                      # Librerías y demos en ensamblador 6502
@@ -663,6 +668,7 @@ src/
     ├── demo_spr12.asm        # Prueba de 12 sprites en la misma línea
     ├── demo_raster.asm       # Demo de split de raster (HUD)
     └── mk_font_c64.py        # Generador de fuente desde el charset del C64
+sim/hdmi/                     # Simulación y receptor HDMI
 docs/                         # Documentación (ver docs/README.md)
 impl/                         # Archivos de implementación (generados)
 *.gprj                        # Archivo de proyecto Gowin

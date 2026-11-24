@@ -1927,6 +1927,9 @@ del resto del manual pareciera contradecir este apéndice, manda el apéndice.
 **No cambian:** direcciones y formato de registros, OAM, patrones, tilemap, atributos,
 paletas, scroll, bandas, `SOLID_HIT`, `SETUP`, fuente y tiempos de vídeo.
 
+La salida HDMI (audio, sincronismos) tampoco cambia nada para el programa: los tiempos de
+`VBLANK` y de línea son los mismos.
+
 La optimización interna (OAM y line buffer en otro tipo de memoria) **no es visible**
 para el programa: no hay nada que emular.
 

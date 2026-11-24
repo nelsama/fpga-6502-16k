@@ -50,3 +50,4 @@ src/asm/*.bin
 !src/asm/c64_charrom.bin
 src/asm/__pycache__/
 __pycache__/
+sim/hdmi/build/

@@ -14,6 +14,7 @@ Sipeed Tang Nano 9K (Gowin GW1NR-9).
 | 05 | [Análisis del Bitmap](05-ANALISIS-BITMAP.md) | Viabilidad, resoluciones, coste, decisión pendiente |
 | 06 | [Reporte del scroll](06-REPORTE-SCROLL.md) | Por qué costó, bug de raíz del video_bus, estado aparcado |
 | **07** | **[Manual de Programación](07-MANUAL-PROGRAMACION.md)** | **Guía para escribir juegos: registros, sprites, tiles, scroll, HUD, colisión, recetas, plantilla y especificación exacta para el emulador (Apéndice B)** |
+| **09** | **[HDMI completo](09-HDMI-COMPLETO.md)** | **Cómo añadir HDMI con audio a otros proyectos de Tang Nano 9K** |
 | **08** | **[Tips de Desarrollo](08-TIPS-DESARROLLO.md)** | **Advertencias y atajos aprendidos: software 6502, VHDL, recursos del chip y compilación** |
 
 ## Resumen ejecutivo
@@ -25,9 +26,9 @@ eliminar ningún módulo existente.
 
 | Recurso | Uso final | Libre | ¿Alcanza? |
 |---------|-----------|-------|-----------|
-| Lógica | 4.822 (56%) | 3.818 | ✅ |
-| FF | 2.600 (39%) | 4.171 | ✅ |
-| CLS | 3.300 (77%) | 1.020 | ✅ |
+| Lógica | 5.250 (61%) | 3.390 | ✅ |
+| FF | 2.734 (41%) | 4.037 | ✅ |
+| CLS | 3.541 (82%) | 779 | ✅ |
 | BSRAM | 19/26 | 7 | ✅ |
 | PLL | 2/2 | 0 | ⚠️ agotados |
 | DSP | 2/10 | 8 | ✅ |
