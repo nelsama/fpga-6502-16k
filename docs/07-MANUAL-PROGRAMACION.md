@@ -851,7 +851,7 @@ cada columna se repiten dos veces.
 ```
 
 **Coste:** el `SCALE2X` se resuelve **dentro del line buffer**, sin sprites ni
-patrones extra. Pero el sprite 2× sigue ocupando **1 de los 8 huecos por
+patrones extra. Pero el sprite 2× sigue ocupando **1 de los 12 huecos por
 línea** (§13), no 4.
 
 ### 6.2c Prioridad, transparencia y solapes entre sprites
