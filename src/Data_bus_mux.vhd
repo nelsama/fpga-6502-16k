@@ -33,8 +33,8 @@ architecture arch of data_bus_mux is
     constant ROM_BLOCK2_END  : unsigned(15 downto 0) := x"BFFF";
 
     constant RAM_BASE  : unsigned(15 downto 0) := x"0000";  -- Inicio de RAM
-    constant RAM_SIZE  : unsigned(15 downto 0) := x"4000";  -- Tamaño RAM (16KB = 0x4000)
-    constant RAM_END   : unsigned(15 downto 0) := RAM_BASE + RAM_SIZE - 1;  -- Fin de RAM (0x3FFF)
+    constant RAM_SIZE  : unsigned(15 downto 0) := x"0800";  -- RAM en BSRAM (2KB); $0800-$7FFF es PSRAM (Board.vhd)
+    constant RAM_END   : unsigned(15 downto 0) := RAM_BASE + RAM_SIZE - 1;  -- Fin de RAM (0x07FF)
     
     signal addr_unsigned : unsigned(15 downto 0);
     signal rom_physical_addr : unsigned(15 downto 0);
@@ -68,7 +68,7 @@ begin
     begin
         if(falling_edge(clk)) then
             if ((addr_unsigned >= RAM_BASE) and (addr_unsigned <= RAM_END) and r_w='1') then 
-                -- RAM: 0x0000 - 0x3FFF
+                -- RAM: 0x0000 - 0x07FF
                 data_bus_out <= ram_data_bus_in; 
                 
             elsif (((addr_unsigned >= ROM_BASE) and (addr_unsigned <= ROM_END)) or 

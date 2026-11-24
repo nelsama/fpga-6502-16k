@@ -124,7 +124,7 @@ architecture arch of Board is
     signal clk_81mhz_safe   : std_logic := '0';
     signal clk_81mhz_p      : std_logic := '0';   -- +90 grados (PSRAM)
 
-    -- PSRAM: RAM del CPU en $4000-$7FFF
+    -- PSRAM: RAM del CPU en $0800-$7FFF
     signal psram_sel  : std_logic;
     signal psram_q    : std_logic_vector(7 downto 0);
 
@@ -405,7 +405,7 @@ begin
                 flags_ce <= '1';
             end if;
 
-            if (addr_bus >= x"0000") and (addr_bus <= x"3FFF") then
+            if (addr_bus >= x"0000") and (addr_bus <= x"07FF") then
                 ram_ce <= '1';
             end if;
 
@@ -531,20 +531,18 @@ begin
         address => rom_addr_out(13 downto 0)  -- 14 bits para 16KB
     );
 
-    ram: entity work.ram_gowin  -- 16k
+    ram: entity work.ram_2k     -- $0000-$07FF: pagina cero y pila
     port map (
-        dout => ram_data_bus,
         clk => system_clk,
-        oce => '1',
         ce => ram_ce,
-        reset => '0',
         wre => not r_w,
-        ad => addr_bus(13 downto 0),
-        din => data_bus
+        ad => addr_bus(10 downto 0),
+        din => data_bus,
+        dout => ram_data_bus
     );
 
-    -- RAM en PSRAM: $4000-$7FFF, sin wait-states
-    psram_sel <= '1' when addr_bus(15 downto 14) = "01" else '0';
+    -- RAM en PSRAM: $0800-$7FFF, sin wait-states
+    psram_sel <= '1' when addr_bus(15) = '0' and addr_bus(14 downto 11) /= "0000" else '0';
 
     psram: entity work.psram_ram
     port map (
