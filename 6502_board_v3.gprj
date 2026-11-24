@@ -24,6 +24,8 @@
         <File path="src/register_8bit.vhd" type="file.vhdl" enable="1"/>
         <File path="src/rom.vhd" type="file.vhdl" enable="1"/>
         <File path="src/sid_wrapper.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/psram/psram_burst.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/psram/psram_ram.vhd" type="file.vhdl" enable="1"/>
         <File path="src/spi_master.vhd" type="file.vhdl" enable="1"/>
         <File path="src/spi_wrapper.vhd" type="file.vhdl" enable="1"/>
         <File path="src/timer_rtc.vhd" type="file.vhdl" enable="1"/>

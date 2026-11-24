@@ -18,7 +18,8 @@ entity A6502 is
              rdy: in std_logic;
              d: inout std_logic_vector(7 downto 0);
              ad: out std_logic_vector(15 downto 0);
-             r: out std_logic
+             r: out std_logic;
+             dout: out std_logic_vector(7 downto 0)   -- dato de escritura (sin pasar por el bus)
                 );
 end A6502;
 
@@ -61,6 +62,7 @@ begin
 		);
 
     cpuDo<=std_logic_vector(tmpDo);
+    dout<=std_logic_vector(tmpDo);
     ad<=std_logic_vector(tmpAddr);
 
 end arch;

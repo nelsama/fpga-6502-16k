@@ -13,6 +13,7 @@ use IEEE.std_logic_1164.all;
 entity Gowin_PLL_81MHz is
     port (
         clkout: out std_logic;
+        clkoutp: out std_logic;   -- 81 MHz desfasados 90 grados (PSRAM)
         lock:   out std_logic;
         clkin:  in std_logic
     );
@@ -20,12 +21,11 @@ end Gowin_PLL_81MHz;
 
 architecture Behavioral of Gowin_PLL_81MHz is
 
-    signal clkoutp_o: std_logic;
     signal clkoutd_o: std_logic;
     signal clkoutd3_o: std_logic;
     signal gw_gnd: std_logic;
 
-    component PLL
+    component rPLL
         generic (
             FCLKIN: STRING := "27";
             DEVICE: STRING := "GW1NR-9C";
@@ -72,17 +72,17 @@ architecture Behavioral of Gowin_PLL_81MHz is
 begin
     gw_gnd <= '0';
 
-    pll_inst: PLL
+    pll_inst: rPLL
         generic map (
             FCLKIN => "27",
             DEVICE => "GW1NR-9C",
             DYN_IDIV_SEL => "false",
             IDIV_SEL => 0,              -- Divisor entrada: /1
             DYN_FBDIV_SEL => "false",
-            FBDIV_SEL => 23,            -- Multiplicador: ×24 (VCO = 27×24 = 648 MHz)
+            FBDIV_SEL => 2,             -- 27 x 3 = 81 MHz
             DYN_ODIV_SEL => "false",
-            ODIV_SEL => 8,              -- Divisor salida: /8 (648/8 = 81 MHz)
-            PSDA_SEL => "0000",
+            ODIV_SEL => 8,              -- VCO = 81 x 8 = 648 MHz (400..1200)
+            PSDA_SEL => "0100",
             DYN_DA_EN => "false",
             DUTYDA_SEL => "1000",
             CLKOUT_FT_DIR => '1',
@@ -100,7 +100,7 @@ begin
         port map (
             CLKOUT => clkout,
             LOCK => lock,
-            CLKOUTP => clkoutp_o,
+            CLKOUTP => clkoutp,
             CLKOUTD => clkoutd_o,
             CLKOUTD3 => clkoutd3_o,
             RESET => gw_gnd,
@@ -112,7 +112,7 @@ begin
             ODSEL => "000000",
             PSDA => "0000",
             DUTYDA => "0000",
-            FDLY => "0000"
+            FDLY => "1111"
         );
 
 end Behavioral;

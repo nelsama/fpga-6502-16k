@@ -35,7 +35,14 @@ entity Board is
             hdmi_tmds_c1_p_out : out std_logic;
             hdmi_tmds_c1_n_out : out std_logic;
             hdmi_tmds_c2_p_out : out std_logic;
-            hdmi_tmds_c2_n_out : out std_logic
+            hdmi_tmds_c2_n_out : out std_logic;
+            -- PSRAM interna (pines dedicados, sin restricciones en el .cst)
+            O_psram_ck      : out   std_logic_vector(1 downto 0);
+            O_psram_ck_n    : out   std_logic_vector(1 downto 0);
+            IO_psram_rwds   : inout std_logic_vector(1 downto 0);
+            IO_psram_dq     : inout std_logic_vector(15 downto 0);
+            O_psram_reset_n : out   std_logic_vector(1 downto 0);
+            O_psram_cs_n    : out   std_logic_vector(1 downto 0)
 );
 end Board;
 
@@ -47,6 +54,7 @@ architecture arch of Board is
     signal addr_bus : std_logic_vector(15 downto 0);
     signal system_clk,tmp_clk: std_logic := '0';
     signal r_w : std_logic;
+    signal cpu_dout : std_logic_vector(7 downto 0);   -- dato de escritura, directo del CPU
     signal port1_ce,port2_ce,conf_p1_ce,conf_p2_ce,ram_ce: std_logic;
     signal flags_ce : std_logic;
     signal flag_user : std_logic := '0';   -- 1 flag persistente (C004 bit0)
@@ -114,6 +122,11 @@ architecture arch of Board is
     signal clk_81mhz        : std_logic := '0';
     signal pll_lock         : std_logic := '0';
     signal clk_81mhz_safe   : std_logic := '0';
+    signal clk_81mhz_p      : std_logic := '0';   -- +90 grados (PSRAM)
+
+    -- PSRAM: RAM del CPU en $4000-$7FFF
+    signal psram_sel  : std_logic;
+    signal psram_q    : std_logic_vector(7 downto 0);
 
 
 begin
@@ -130,6 +143,7 @@ begin
     pll_inst: entity work.Gowin_PLL_81MHz
     port map (
         clkout => clk_81mhz,
+        clkoutp => clk_81mhz_p,
         lock   => pll_lock,
         clkin  => CLOCK_27_i
     );
@@ -199,7 +213,8 @@ begin
              rdy=>'1',
              d=>data_bus,
              ad=>addr_bus,
-             r=>r_w
+             r=>r_w,
+             dout=>cpu_dout
 	);
 
     i2c_interface : entity work.i2c_gowin_wrapper
@@ -527,5 +542,30 @@ begin
         ad => addr_bus(13 downto 0),
         din => data_bus
     );
+
+    -- RAM en PSRAM: $4000-$7FFF, sin wait-states
+    psram_sel <= '1' when addr_bus(15 downto 14) = "01" else '0';
+
+    psram: entity work.psram_ram
+    port map (
+        clk_mem   => clk_81mhz,
+        clk_mem_p => clk_81mhz_p,
+        lock      => pll_lock,
+        cpu_clk   => cpu_clk,
+        sel       => psram_sel,
+        we        => not r_w,
+        addr      => addr_bus(14 downto 0),
+        din       => cpu_dout,
+        dout      => psram_q,
+        ready     => open,
+        O_psram_ck      => O_psram_ck,
+        O_psram_ck_n    => O_psram_ck_n,
+        IO_psram_rwds   => IO_psram_rwds,
+        IO_psram_dq     => IO_psram_dq,
+        O_psram_reset_n => O_psram_reset_n,
+        O_psram_cs_n    => O_psram_cs_n
+    );
+
+    data_bus <= psram_q when (psram_sel = '1' and r_w = '1') else (others => 'Z');
 
 end arch;
