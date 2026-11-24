@@ -41,7 +41,7 @@ end entity;
 architecture rtl of hdmi_tx is
 
     type b9x32_t is array (0 to 31) of std_logic_vector(8 downto 0);
-    type rom_t   is array (0 to 127) of std_logic_vector(8 downto 0);
+    type rom_t   is array (0 to 159) of std_logic_vector(8 downto 0);
     type bytes_t is array (natural range <>) of std_logic_vector(7 downto 0);
 
     -- un bit por el BCH (x^8 + x^7 + x^6 + 1, LSB primero)
@@ -119,6 +119,13 @@ architecture rtl of hdmi_tx is
          x"00", x"00", x"00", x"00", x"00", x"00", x"00",
          x"00", x"00", x"00", x"00", x"00", x"00", x"00",
          x"00", x"00", x"00", x"00", x"00", x"00", x"00"));
+    -- Control general: Clear_AVMUTE (quita el silencio de imagen y sonido)
+    constant GCP : b9x32_t := mk_packet(
+        (x"03", x"00", x"00"),
+        (x"10", x"00", x"00", x"00", x"00", x"00", x"00",
+         x"10", x"00", x"00", x"00", x"00", x"00", x"00",
+         x"10", x"00", x"00", x"00", x"00", x"00", x"00",
+         x"10", x"00", x"00", x"00", x"00", x"00", x"00"));
     -- Muestra de audio: solo cabeceras (sin / con inicio de bloque)
     constant Z28 : bytes_t(0 to 27) := (others => x"00");
     constant AS0 : b9x32_t := mk_packet((x"02", x"01", x"00"), Z28);
@@ -133,6 +140,7 @@ architecture rtl of hdmi_tx is
             r(32 + i) := ACR(i);
             r(64 + i) := AVI(i);
             r(96 + i) := AIF(i);
+            r(128 + i) := GCP(i);
         end loop;
         return r;
     end function;
@@ -182,8 +190,8 @@ architecture rtl of hdmi_tx is
     signal isl   : std_logic := '0';                          -- dentro de paquetes
     signal pos   : unsigned(6 downto 0) := (others => '0');   -- slot & pixel
     signal npk   : unsigned(1 downto 0) := (others => '0');   -- paquetes de la linea
-    signal stat  : unsigned(1 downto 0) := (others => '0');   -- 0 nada, 1 ACR, 2 AVI, 3 AIF
-    signal typ   : unsigned(1 downto 0);                      -- tipo del slot actual
+    signal stat  : unsigned(2 downto 0) := (others => '0');   -- 0 nada, 1 ACR, 2 AVI, 3 AIF, 4 GCP
+    signal typ   : unsigned(2 downto 0);                      -- tipo del slot actual
     signal pend  : unsigned(1 downto 0);
     signal endh  : unsigned(1 downto 0) := (others => '0');   -- guarda de salida
     signal pre   : std_logic;
@@ -232,7 +240,7 @@ begin
 
     -- ---- reparto de la linea ----
     pend <= "10" when cnt >= 2 else cnt(1 downto 0);
-    typ  <= stat when pos(6 downto 5) = 0 else "00";
+    typ  <= stat when pos(6 downto 5) = 0 else "000";
     pre  <= '1' when h_cnt >= 728 and h_cnt <= 735 else '0';
     gin  <= '1' when h_cnt = 736 or h_cnt = 737 else '0';
 
@@ -267,16 +275,19 @@ begin
             if h_cnt = 724 then
                 -- decidir los paquetes de esta linea
                 if v_cnt(4 downto 0) = 0 then
-                    stat <= "01";
+                    stat <= "001";
                     npk  <= pend + 1;
                 elsif v_cnt = 10 or v_cnt = 490 then
-                    stat <= "10";
+                    stat <= "010";
                     npk  <= pend + 1;
                 elsif v_cnt = 11 or v_cnt = 491 then
-                    stat <= "11";
+                    stat <= "011";
+                    npk  <= pend + 1;
+                elsif v_cnt = 484 then           -- en el borrado vertical
+                    stat <= "100";
                     npk  <= pend + 1;
                 else
-                    stat <= "00";
+                    stat <= "000";
                     npk  <= pend;
                 end if;
             end if;
@@ -328,7 +339,10 @@ begin
         variable i : integer range 0 to 31;
     begin
         i := to_integer(pos(4 downto 0));
-        w := ROM(to_integer(typ & pos(4 downto 0)));
+        w := (others => '0');
+        if typ <= 4 then
+            w := ROM(to_integer(typ & pos(4 downto 0)));
+        end if;
         if typ = 0 then
             -- cabecera de la ROM; solo el subpaquete 0 lleva datos
             d0 <= (others => '0');
