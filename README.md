@@ -3,7 +3,7 @@
 Computador retro basado en el procesador **MOS 6502** implementado en una [**Sipeed Tang Nano 9K**](https://wiki.sipeed.com/hardware/en/tang/Tang-Nano-9K/Nano-9K.html) (Gowin GW1NR-9). Incluye CPU, memoria RAM/ROM expandida, puertos GPIO bidireccionales, comunicación I2C, SPI, UART, **chip de sonido SID 6581** y **salida de vídeo HDMI** (tiles + sprites, para juegos retro).
 
 > 🆕 **32 KB de RAM** (`$0000-$7FFF`) y 16 KB de ROM (`$8000-$BFFF`). La ROM incluida es el
-> **monitor v2.8.0**, que ya usa toda la RAM.
+> **monitor v2.9.0**, que deja a los programas 30 KB seguidos (`$0800-$7FFF`).
 
 ### Novedades (noviembre de 2026)
 
@@ -348,17 +348,17 @@ El chip de sonido SID está mapeado en `$D400-$D41F`, igual que en el Commodore 
 
 ## 🖥️ Monitor (ROM)
 
-La ROM incluida es el **monitor v2.8.0** (UART a 115200 baudios). Memoria según su comando `I`:
+La ROM incluida es el **monitor v2.9.0** (UART a 115200 baudios). Memoria según su comando `I`:
 
 | Rango | Uso |
 |---|---|
 | `$0002-$00FF` | Página cero |
-| `$0100-$3DFF` | RAM |
-| `$3E00-$3FFF` | Pila de software del monitor: **no usar** |
-| `$4000-$7FFF` | RAM (nueva en v2.8.0) |
+| `$0200-$065F` | Variables del monitor: **no usar** |
+| `$0660-$07FF` | Pila de software del monitor: **no usar** |
+| `$0800-$7FFF` | RAM para programas |
 
-**Para tus programas:** `$0800-$3DFF` y `$4000-$7FFF`. No es un bloque continuo: un programa
-que deba volver al monitor no puede pisar `$3E00-$3FFF`.
+**Para tus programas:** `$0800-$7FFF`, 30 KB seguidos. Hasta la v2.8.0 la pila del monitor
+estaba en `$3E00-$3FFF` y partía la RAM en dos.
 
 | Comando | Función |
 |---|---|

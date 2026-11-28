@@ -131,7 +131,7 @@ Mantén el contenido importante entre las filas **1 y 28**.
 
 ### 1.10 Boot: flag de auto-arranque en `$C004`
 
-El monitor (v2.7.0 y v2.8.0) guarda el control del auto-arranque de `BOOT.INI` en el **bit 0 de
+El monitor (desde la v2.7.0) guarda el control del auto-arranque de `BOOT.INI` en el **bit 0 de
 `$C004`** (ya no en RAM, `$3FFE-$3FFF`): **1 = auto-arranca**, 0 = no. Es un registro
 que **S1 no borra**; vuelve a 0 al apagar o al recargar el bitstream (Manual §2.5).
 
